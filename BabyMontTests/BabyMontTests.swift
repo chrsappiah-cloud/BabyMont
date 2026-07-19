@@ -269,6 +269,7 @@ struct BabyMonitorViewModelTests {
         #expect(services.store.savedEvents.first?.didEscalateToWatch == true)
         #expect(services.cloud.savedEvents.contains { $0.title == "Manual test alert" })
         #expect(viewModel.statusMessage == "Critical alert escalated")
+        #expect(viewModel.cloudStatusMessage == "CloudKit saved Manual test alert")
     }
 
     @Test func configurePreparesPushWatchCloudAndHome() async {
@@ -282,6 +283,33 @@ struct BabyMonitorViewModelTests {
         #expect(services.watch.didConfigure)
         #expect(services.cloud.didConfigure)
         #expect(services.home.selectedRoomName == "Nursery")
+    }
+
+    @Test func notificationReadinessUpdatesDeviceTokenAndCloudEvents() async {
+        let services = MockServices()
+        let viewModel = BabyMonitorViewModel(dependencies: services.dependencies)
+
+        await viewModel.requestNotificationReadiness()
+
+        #expect(services.push.didRequestAuthorization)
+        #expect(services.push.didRegisterForRemoteNotifications)
+        #expect(services.cloud.updatedDeviceTokens == ["mock-device-token"])
+        #expect(viewModel.pushAuthorizationState == .active)
+        #expect(viewModel.deviceTokenSummary == "mock-dev...")
+        #expect(viewModel.cloudStatusMessage == "CloudKit ready")
+    }
+
+    @Test func refreshCloudEventsSurfacesFetchedCloudCount() async {
+        let services = MockServices()
+        services.cloud.seed([
+            BabyEvent(category: .alert, severity: .warning, title: "Cloud warning", detail: "Fetched from CloudKit")
+        ])
+        let viewModel = BabyMonitorViewModel(dependencies: services.dependencies)
+
+        await viewModel.refreshCloudEvents()
+
+        #expect(viewModel.cloudEventCount == 1)
+        #expect(viewModel.cloudStatusMessage == "CloudKit synced 1 events")
     }
 }
 
@@ -468,6 +496,10 @@ private final class MockCloudSyncService: CloudSyncServicing {
 
     func fetchRecentEvents(limit: Int) async -> [BabyEvent] {
         Array(savedEvents.prefix(limit))
+    }
+
+    func seed(_ events: [BabyEvent]) {
+        savedEvents = events
     }
 }
 

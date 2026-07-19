@@ -8,6 +8,7 @@ struct BabyMonitorDashboardView: View {
             VStack(alignment: .leading, spacing: 18) {
                 hero
                 controls
+                readinessPanel
                 cameraPreview
                 signalGrid
                 alertRules
@@ -24,26 +25,37 @@ struct BabyMonitorDashboardView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Local-first baby monitoring")
+                    Text("BabyMont Nursery Command")
                         .font(.system(.title2, design: .rounded, weight: .bold))
                     Text(viewModel.statusMessage)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Image(systemName: viewModel.isMonitoring ? "sensor.tag.radiowaves.forward.fill" : "sensor.tag.radiowaves.forward")
-                    .font(.system(size: 34, weight: .semibold))
-                    .foregroundStyle(viewModel.isMonitoring ? .teal : .secondary)
+                ZStack {
+                    Circle()
+                        .fill(viewModel.isMonitoring ? Color.green.opacity(0.16) : Color.gray.opacity(0.14))
+                        .frame(width: 54, height: 54)
+                    Image(systemName: viewModel.isMonitoring ? "sensor.tag.radiowaves.forward.fill" : "sensor.tag.radiowaves.forward")
+                        .font(.system(size: 27, weight: .semibold))
+                        .foregroundStyle(viewModel.isMonitoring ? .green : .secondary)
+                }
             }
 
             HStack(spacing: 10) {
-                BadgeLabel(title: "On-device", systemImage: "lock.shield")
-                BadgeLabel(title: "APNs", systemImage: "bell.badge")
-                BadgeLabel(title: "Watch", systemImage: "applewatch.radiowaves.left.and.right")
+                BadgeLabel(title: "Private", systemImage: "lock.shield", tint: .green)
+                BadgeLabel(title: "APNs", systemImage: "bell.badge", tint: .indigo)
+                BadgeLabel(title: "Watch", systemImage: "applewatch.radiowaves.left.and.right", tint: .orange)
             }
         }
         .padding(18)
-        .background(.background)
+        .background(
+            LinearGradient(
+                colors: [Color(.systemBackground), Color.green.opacity(0.08), Color.indigo.opacity(0.06)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
@@ -82,6 +94,59 @@ struct BabyMonitorDashboardView: View {
             .buttonStyle(.bordered)
             .accessibilityIdentifier("button.test.alert")
         }
+    }
+
+    private var readinessPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Production Readiness")
+                    .font(.headline)
+                Spacer()
+                Button {
+                    Task { await viewModel.refreshCloudEvents() }
+                } label: {
+                    Label("Sync", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("button.cloud.sync")
+            }
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                ReadinessTile(
+                    title: "Camera",
+                    value: viewModel.snapshot.camera.state.title,
+                    detail: "\(viewModel.snapshot.camera.capturedFrameCount) frames",
+                    systemImage: "video.fill",
+                    tint: viewModel.snapshot.camera.state == .active ? .green : .secondary
+                )
+                ReadinessTile(
+                    title: "Audio",
+                    value: viewModel.snapshot.audio.state.title,
+                    detail: viewModel.snapshot.audio.classification.title,
+                    systemImage: "waveform",
+                    tint: viewModel.snapshot.audio.state == .active ? .orange : .secondary
+                )
+                ReadinessTile(
+                    title: "CloudKit",
+                    value: viewModel.cloudIsAvailable ? "Ready" : "Offline",
+                    detail: viewModel.cloudStatusMessage,
+                    systemImage: "icloud.fill",
+                    tint: viewModel.cloudIsAvailable ? .blue : .secondary,
+                    identifier: "readiness.cloud"
+                )
+                ReadinessTile(
+                    title: "HomeKit",
+                    value: viewModel.homeAutomationIsAvailable ? "Ready" : "Optional",
+                    detail: viewModel.homeAutomationStatusMessage,
+                    systemImage: "homekit",
+                    tint: viewModel.homeAutomationIsAvailable ? .purple : .secondary,
+                    identifier: "readiness.home"
+                )
+            }
+        }
+        .padding(16)
+        .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var cameraPreview: some View {
@@ -237,6 +302,7 @@ struct BabyMonitorDashboardView: View {
 private struct BadgeLabel: View {
     let title: String
     let systemImage: String
+    let tint: Color
 
     var body: some View {
         Label(title, systemImage: systemImage)
@@ -245,9 +311,48 @@ private struct BadgeLabel: View {
             .minimumScaleFactor(0.78)
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .background(Color.teal.opacity(0.12))
-            .foregroundStyle(.teal)
+            .background(tint.opacity(0.12))
+            .foregroundStyle(tint)
             .clipShape(Capsule())
+    }
+}
+
+private struct ReadinessTile: View {
+    let title: String
+    let value: String
+    let detail: String
+    let systemImage: String
+    let tint: Color
+    var identifier: String?
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.headline)
+                .foregroundStyle(tint)
+                .frame(width: 30, height: 30)
+                .background(tint.opacity(0.12))
+                .clipShape(Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .font(.subheadline.weight(.semibold))
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 78, alignment: .leading)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(identifier ?? "readiness.\(title.lowercased())")
     }
 }
 
@@ -448,6 +553,15 @@ struct MonitorSettingsView: View {
             Section("Readiness") {
                 LabeledContent("Status", value: viewModel.statusMessage)
                 LabeledContent("Monitoring", value: viewModel.isMonitoring ? "Running" : "Paused")
+                LabeledContent("Notifications", value: viewModel.pushAuthorizationState.title)
+                LabeledContent("Device token", value: viewModel.deviceTokenSummary)
+                LabeledContent("CloudKit", value: viewModel.cloudStatusMessage)
+                Text(viewModel.cloudStatusMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("settings.cloud.status")
+                LabeledContent("HomeKit", value: viewModel.homeAutomationStatusMessage)
+                LabeledContent("Watch", value: viewModel.watchState.title)
             }
 
             Section("Actions") {
@@ -457,6 +571,13 @@ struct MonitorSettingsView: View {
                     Label("Prepare Notifications", systemImage: "bell.badge")
                 }
                 .accessibilityIdentifier("settings.notifications")
+
+                Button {
+                    Task { await viewModel.refreshCloudEvents() }
+                } label: {
+                    Label("Refresh Cloud Events", systemImage: "icloud.and.arrow.down")
+                }
+                .accessibilityIdentifier("settings.cloud.refresh")
 
                 Button(role: .destructive) {
                     Task { await viewModel.simulateCriticalAlert() }

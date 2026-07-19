@@ -57,16 +57,16 @@ enum BabyEventSeverity: String, CaseIterable, Identifiable, Codable, Comparable 
 
 @Model
 final class BabyEvent {
-    var id: UUID
-    var timestamp: Date
-    var categoryRawValue: String
-    var severityRawValue: String
-    var title: String
-    var detail: String
+    var id: UUID = UUID()
+    var timestamp: Date = Date()
+    var categoryRawValue: String = BabyEventCategory.system.rawValue
+    var severityRawValue: String = BabyEventSeverity.info.rawValue
+    var title: String = ""
+    var detail: String = ""
     var confidence: Double = 1
     var metadataJSON: String = "{}"
-    var didEscalateToWatch: Bool
-    var didRequestPush: Bool
+    var didEscalateToWatch: Bool = false
+    var didRequestPush: Bool = false
 
     init(
         id: UUID = UUID(),

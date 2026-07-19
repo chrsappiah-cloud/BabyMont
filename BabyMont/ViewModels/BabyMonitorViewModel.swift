@@ -11,6 +11,9 @@ final class BabyMonitorViewModel: ObservableObject {
     @Published private(set) var isMonitoring = false
     @Published private(set) var statusMessage = "Local monitor ready"
     @Published private(set) var lastSnapshot: UIImage?
+    @Published private(set) var cloudStatusMessage = "Cloud sync not checked"
+    @Published private(set) var cloudEventCount = 0
+    @Published private(set) var homeAutomationStatusMessage = "HomeKit not checked"
     @Published var alertConfiguration = AlertRuleConfiguration()
 
     private var dependencies: AppDependencies
@@ -30,11 +33,14 @@ final class BabyMonitorViewModel: ObservableObject {
         self.dependencies.push.configure()
         self.dependencies.watch.configure()
         recentEvents = dependencies.eventStore.recentEvents(limit: 12)
+        cloudStatusMessage = dependencies.cloudSync.isAvailable ? "CloudKit available" : "Checking CloudKit"
+        homeAutomationStatusMessage = dependencies.homeAutomation.isAvailable ? "HomeKit ready" : "Checking HomeKit"
 
         Task { [dependencies] in
             await dependencies.cloudSync.configure()
             await dependencies.homeAutomation.configure()
             dependencies.homeAutomation.selectNurseryRoom(named: "Nursery")
+            refreshReadinessState()
         }
     }
 
@@ -42,6 +48,8 @@ final class BabyMonitorViewModel: ObservableObject {
         await dependencies.push.requestAuthorization()
         dependencies.push.registerForRemoteNotifications()
         await dependencies.cloudSync.updateDeviceToken(dependencies.push.deviceToken)
+        await refreshCloudEvents()
+        refreshReadinessState()
     }
 
     func startMonitoring() async {
@@ -101,8 +109,41 @@ final class BabyMonitorViewModel: ObservableObject {
         )
     }
 
+    func refreshCloudEvents() async {
+        let events = await dependencies.cloudSync.fetchRecentEvents(limit: 12)
+        cloudEventCount = events.count
+        if dependencies.cloudSync.isAvailable {
+            cloudStatusMessage = events.isEmpty ? "CloudKit ready" : "CloudKit synced \(events.count) events"
+        } else {
+            cloudStatusMessage = "CloudKit unavailable"
+        }
+    }
+
     var cameraSession: AVCaptureSession? {
         dependencies.camera.session
+    }
+
+    var pushAuthorizationState: MonitoringState {
+        dependencies.push.authorizationState
+    }
+
+    var watchState: MonitoringState {
+        dependencies.watch.state
+    }
+
+    var cloudIsAvailable: Bool {
+        dependencies.cloudSync.isAvailable
+    }
+
+    var homeAutomationIsAvailable: Bool {
+        dependencies.homeAutomation.isAvailable
+    }
+
+    var deviceTokenSummary: String {
+        guard let token = dependencies.push.deviceToken, !token.isEmpty else {
+            return "No device token"
+        }
+        return "\(token.prefix(8))..."
     }
 
     private func startRefreshLoop() {
@@ -160,8 +201,19 @@ final class BabyMonitorViewModel: ObservableObject {
             syncToCloud: false
         )
         await dependencies.cloudSync.save(event)
+        if dependencies.cloudSync.isAvailable {
+            cloudStatusMessage = "CloudKit saved \(event.title)"
+            cloudEventCount += 1
+        } else {
+            cloudStatusMessage = "CloudKit unavailable"
+        }
 
         statusMessage = candidate.severity == .critical ? "Critical alert escalated" : "Attention alert recorded"
+    }
+
+    private func refreshReadinessState() {
+        cloudStatusMessage = dependencies.cloudSync.isAvailable ? "CloudKit ready" : "CloudKit unavailable"
+        homeAutomationStatusMessage = dependencies.homeAutomation.isAvailable ? "HomeKit ready" : "HomeKit unavailable"
     }
 
     @discardableResult

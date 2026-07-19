@@ -24,8 +24,8 @@ struct AppDependencies {
             eventStore: SwiftDataEventStore(modelContext: modelContext),
             push: PushNotificationService.shared,
             watch: WatchEscalationService(),
-            cloudSync: DisabledCloudSyncService(),
-            homeAutomation: DisabledHomeAutomationService()
+            cloudSync: CloudKitCareTeamSyncService(),
+            homeAutomation: HomeAutomationService()
         )
     }
 
@@ -168,11 +168,17 @@ final class DisabledHomeAutomationService: HomeAutomationServicing {
 @MainActor
 final class PreviewCloudSyncService: CloudSyncServicing {
     private(set) var isAvailable = true
+    private var events: [BabyEvent] = []
 
     func configure() async {}
     func updateDeviceToken(_ token: String?) async {}
-    func save(_ event: BabyEvent) async {}
-    func fetchRecentEvents(limit: Int) async -> [BabyEvent] { [] }
+    func save(_ event: BabyEvent) async {
+        events.insert(event, at: 0)
+    }
+
+    func fetchRecentEvents(limit: Int) async -> [BabyEvent] {
+        Array(events.prefix(limit))
+    }
 }
 
 @MainActor

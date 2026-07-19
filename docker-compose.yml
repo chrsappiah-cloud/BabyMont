@@ -15,6 +15,18 @@ services:
     secrets:
       - apns_auth_key
 
+  apns-provider-tests:
+    build:
+      context: .
+      dockerfile: apns_provider/Dockerfile
+    image: worldclassscholars/babymont-apns:local
+    command: ["python", "-m", "pytest", "tests"]
+    environment:
+      APNS_TEAM_ID: "TEST_TEAM_ID"
+      APNS_KEY_ID: "TEST_KEY_ID"
+      APNS_BUNDLE_ID: "wcs.BabyMont"
+      APNS_ENVIRONMENT: "sandbox"
+
   cry-model-builder:
     build:
       context: .
