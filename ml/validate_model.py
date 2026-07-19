@@ -60,7 +60,7 @@ def main() -> None:
     if not args.model.exists():
         raise SystemExit(f"Model does not exist: {args.model}")
 
-    model = ct.models.MLModel(args.model)
+    model = ct.models.MLModel(str(args.model))
 
     if platform.system() != "Darwin":
         spec = model.get_spec()
