@@ -1,0 +1,46 @@
+name: Train Cry Model
+
+on:
+  push:
+    paths:
+      - "data/**"
+      - "ml/**"
+      - "Dockerfile"
+      - ".dockerignore"
+      - ".github/workflows/train_cry_model.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Create venv and install deps
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          python -m pip install --upgrade pip
+          pip install -r ml/requirements.txt
+
+      - name: Train or generate model
+        run: |
+          source .venv/bin/activate
+          bash ml/run_model_pipeline.sh
+
+      - name: Commit and push model
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "ci: rebuild CryDetector.mlmodel"
+          file_pattern: "BabyMont/Resources/Models/CryDetector.mlmodel BabyMont/Resources/Models/CryDetector.preprocessing.json"
+          branch: ${{ github.ref_name }}

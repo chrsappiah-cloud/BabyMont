@@ -1,0 +1,5 @@
+tensorflow==2.15.0
+coremltools==7.2
+numpy==1.26.4
+librosa==0.10.1
+soundfile==0.12.1

@@ -1,0 +1,15 @@
+.git
+.github
+DerivedData
+*.xcuserstate
+*.xcworkspace/xcuserdata
+BabyMont.xcodeproj/xcuserdata
+BabyMont.xcodeproj/project.xcworkspace/xcuserdata
+__pycache__
+**/__pycache__/
+*.pyc
+.pytest_cache
+.DS_Store
+.venv
+apns_provider/.venv
+data/**/*.DS_Store

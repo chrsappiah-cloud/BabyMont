@@ -1,43 +1,80 @@
-//
-//  BabyMontUITests.swift
-//  BabyMontUITests
-//
-//  Created by Christopher Appiah-Thompson  on 19/7/2026.
-//
-
 import XCTest
 
 final class BabyMontUITests: XCTestCase {
+    private var app: XCUIApplication!
 
     override func setUpWithError() throws {
-        // Put setup code here. This method is called before the invocation of each test method in the class.
-
-        // In UI tests it is usually best to stop immediately when a failure occurs.
         continueAfterFailure = false
-
-        // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
-    }
-
-    override func tearDownWithError() throws {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
+        app = XCUIApplication()
+        app.launchArguments = ["--ui-testing"]
+        app.launch()
     }
 
     @MainActor
-    func testExample() throws {
-        // UI tests must launch the application that they test.
-        let app = XCUIApplication()
-        app.launch()
+    func testPrimaryTabsNavigateToProductionScreens() {
+        XCTAssertTrue(app.staticTexts["Local-first baby monitoring"].waitForExistence(timeout: 5))
 
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
-        // XCUIAutomation Documentation
-        // https://developer.apple.com/documentation/xcuiautomation
+        app.tabBars.buttons["Events"].tap()
+        XCTAssertTrue(app.navigationBars["Events"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.otherElements["events.history.empty"].exists || app.staticTexts["No events yet"].exists)
+
+        app.tabBars.buttons["Rules"].tap()
+        XCTAssertTrue(app.navigationBars["Rules"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.switches["rules.lowLight"].exists)
+
+        app.tabBars.buttons["Settings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["settings.manualCritical"].exists)
+
+        app.tabBars.buttons["Monitor"].tap()
+        XCTAssertTrue(app.navigationBars["BabyMont"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    func testStartMonitoringStoresEventAndUpdatesEventsTab() {
+        app.buttons["button.monitor.toggle"].tap()
+        XCTAssertTrue(app.staticTexts["Monitoring locally"].waitForExistence(timeout: 5))
+
+        app.tabBars.buttons["Events"].tap()
+        XCTAssertTrue(app.staticTexts["Monitoring started"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testManualCriticalAlertAppearsInEventHistoryAndSettings() {
+        app.buttons["button.test.alert"].tap()
+        XCTAssertTrue(app.staticTexts["Critical alert escalated"].waitForExistence(timeout: 5))
+
+        app.tabBars.buttons["Events"].tap()
+        XCTAssertTrue(app.staticTexts["Manual test alert"].waitForExistence(timeout: 5))
+
+        app.tabBars.buttons["Settings"].tap()
+        app.buttons["settings.manualCritical"].tap()
+        app.tabBars.buttons["Events"].tap()
+        XCTAssertTrue(app.staticTexts["Manual test alert"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testRulesTabExposesProductionAlertControls() {
+        app.tabBars.buttons["Rules"].tap()
+
+        XCTAssertTrue(app.sliders["rules.noise.threshold"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.sliders["rules.stillness.threshold"].exists)
+        XCTAssertTrue(app.sliders["rules.humidity.low"].exists)
+        XCTAssertTrue(app.sliders["rules.humidity.high"].exists)
+        XCTAssertTrue(app.switches["rules.lowLight"].exists)
+
+        let lowLightToggle = app.switches["rules.lowLight"]
+        let initialValue = lowLightToggle.value as? String
+        lowLightToggle.tap()
+        XCTAssertNotEqual(lowLightToggle.value as? String, initialValue)
     }
 
     @MainActor
     func testLaunchPerformance() throws {
-        // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
+            let measuredApp = XCUIApplication()
+            measuredApp.launchArguments = ["--ui-testing"]
+            measuredApp.launch()
         }
     }
 }
