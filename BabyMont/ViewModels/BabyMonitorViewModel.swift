@@ -59,7 +59,17 @@ final class BabyMonitorViewModel: ObservableObject {
         await dependencies.motion.start()
 
         isMonitoring = true
-        saveEvent(category: .system, severity: .info, title: "Monitoring started", detail: "Camera, audio and motion services are running locally.")
+        let event = saveEvent(
+            category: .system,
+            severity: .info,
+            title: "Monitoring started",
+            detail: "Camera, audio and motion services are running locally.",
+            syncToCloud: false
+        )
+        await dependencies.cloudSync.save(event)
+        if dependencies.cloudSync.isAvailable {
+            cloudEventCount += 1
+        }
         startRefreshLoop()
     }
 
@@ -243,6 +253,8 @@ final class BabyMonitorViewModel: ObservableObject {
     }
 
     private func refresh() async {
+        guard isMonitoring else { return }
+
         snapshot = MonitoringSnapshot(
             camera: dependencies.camera.signal,
             audio: dependencies.audio.signal,
@@ -260,7 +272,7 @@ final class BabyMonitorViewModel: ObservableObject {
             await handle(candidate)
         }
 
-        if candidates.isEmpty {
+        if isMonitoring, candidates.isEmpty {
             statusMessage = snapshot.isRunning ? "Monitoring locally" : "Local monitor ready"
         }
     }

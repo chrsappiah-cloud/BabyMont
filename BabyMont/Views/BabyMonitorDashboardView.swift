@@ -8,6 +8,7 @@ struct BabyMonitorDashboardView: View {
             VStack(alignment: .leading, spacing: 18) {
                 hero
                 controls
+                backendOperationsPanel
                 readinessPanel
                 cameraPreview
                 signalGrid
@@ -32,14 +33,7 @@ struct BabyMonitorDashboardView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                ZStack {
-                    Circle()
-                        .fill(viewModel.isMonitoring ? Color.green.opacity(0.16) : Color.gray.opacity(0.14))
-                        .frame(width: 54, height: 54)
-                    Image(systemName: viewModel.isMonitoring ? "sensor.tag.radiowaves.forward.fill" : "sensor.tag.radiowaves.forward")
-                        .font(.system(size: 27, weight: .semibold))
-                        .foregroundStyle(viewModel.isMonitoring ? .green : .secondary)
-                }
+                MonitorStateDial(isMonitoring: viewModel.isMonitoring)
             }
 
             HStack(spacing: 10) {
@@ -51,16 +45,20 @@ struct BabyMonitorDashboardView: View {
         .padding(18)
         .background(
             LinearGradient(
-                colors: [Color(.systemBackground), Color.green.opacity(0.08), Color.indigo.opacity(0.06)],
+                colors: [Color(.systemBackground), Color.indigo.opacity(0.10), Color.green.opacity(0.08)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.indigo.opacity(0.14), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var controls: some View {
-        HStack(spacing: 12) {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
             Button {
                 Task {
                     if viewModel.isMonitoring {
@@ -73,7 +71,7 @@ struct BabyMonitorDashboardView: View {
                 Label(viewModel.isMonitoring ? "Pause" : "Start", systemImage: viewModel.isMonitoring ? "pause.fill" : "play.fill")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(ProductionActionButtonStyle(tint: viewModel.isMonitoring ? .orange : .green, isProminent: true))
             .accessibilityIdentifier("button.monitor.toggle")
 
             Button {
@@ -82,7 +80,7 @@ struct BabyMonitorDashboardView: View {
                 Label("APNs", systemImage: "bell.badge")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(ProductionActionButtonStyle(tint: .indigo))
             .accessibilityIdentifier("button.apns.readiness")
 
             Button {
@@ -91,9 +89,104 @@ struct BabyMonitorDashboardView: View {
                 Label("Test", systemImage: "exclamationmark.triangle")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(ProductionActionButtonStyle(tint: .red))
             .accessibilityIdentifier("button.test.alert")
+
+            Button {
+                Task { await viewModel.refreshCloudEvents() }
+            } label: {
+                Label("Sync", systemImage: "arrow.triangle.2.circlepath")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(ProductionActionButtonStyle(tint: .blue))
+            .accessibilityIdentifier("button.cloud.sync")
         }
+    }
+
+    private var backendOperationsPanel: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Backend Operations")
+                        .font(.headline)
+                    Text("Local-first service mesh")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                BackendStatusPill(
+                    title: viewModel.cloudIsAvailable ? "Online" : "Offline",
+                    systemImage: viewModel.cloudIsAvailable ? "checkmark.seal.fill" : "exclamationmark.triangle.fill",
+                    tint: viewModel.cloudIsAvailable ? .green : .orange
+                )
+            }
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                BackendFunctionTile(
+                    title: "APNs",
+                    value: viewModel.pushAuthorizationState.title,
+                    detail: viewModel.deviceTokenSummary,
+                    systemImage: "bell.and.waves.left.and.right.fill",
+                    tint: .indigo,
+                    identifier: "backend.apns"
+                )
+                BackendFunctionTile(
+                    title: "CloudKit",
+                    value: viewModel.cloudIsAvailable ? "Ready" : "Offline",
+                    detail: viewModel.cloudStatusMessage,
+                    systemImage: "icloud.fill",
+                    tint: .blue,
+                    identifier: "readiness.cloud"
+                )
+                BackendFunctionTile(
+                    title: "Watch",
+                    value: viewModel.watchState.title,
+                    detail: "Escalation channel",
+                    systemImage: "applewatch.radiowaves.left.and.right",
+                    tint: .orange,
+                    identifier: "backend.watch"
+                )
+                BackendFunctionTile(
+                    title: "HomeKit",
+                    value: viewModel.homeAutomationIsAvailable ? "Ready" : "Optional",
+                    detail: viewModel.homeAutomationStatusMessage,
+                    systemImage: "homekit",
+                    tint: .purple,
+                    identifier: "backend.homekit"
+                )
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    Task { await viewModel.requestNotificationReadiness() }
+                } label: {
+                    Label("Prepare", systemImage: "bell.badge.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(ProductionActionButtonStyle(tint: .indigo))
+                .accessibilityIdentifier("backend.prepare")
+
+                Button {
+                    Task { await viewModel.refreshCloudEvents() }
+                } label: {
+                    Label("Sync", systemImage: "arrow.triangle.2.circlepath.icloud")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(ProductionActionButtonStyle(tint: .blue))
+                .accessibilityIdentifier("backend.sync")
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(.systemBackground))
+                .shadow(color: Color.black.opacity(0.05), radius: 12, x: 0, y: 6)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(.separator).opacity(0.25), lineWidth: 1)
+        )
+        .accessibilityIdentifier("panel.backend.operations")
     }
 
     private var readinessPanel: some View {
@@ -107,8 +200,8 @@ struct BabyMonitorDashboardView: View {
                 } label: {
                     Label("Sync", systemImage: "arrow.triangle.2.circlepath")
                 }
-                .buttonStyle(.bordered)
-                .accessibilityIdentifier("button.cloud.sync")
+                .buttonStyle(ProductionActionButtonStyle(tint: .blue))
+                .accessibilityIdentifier("button.cloud.sync.readiness")
             }
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
@@ -145,7 +238,11 @@ struct BabyMonitorDashboardView: View {
             }
         }
         .padding(16)
-        .background(.background)
+        .background(Color(.systemBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(.separator).opacity(0.25), lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
@@ -184,7 +281,11 @@ struct BabyMonitorDashboardView: View {
             }
         }
         .padding(16)
-        .background(.background)
+        .background(Color(.systemBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(.separator).opacity(0.25), lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
@@ -315,6 +416,116 @@ private struct BadgeLabel: View {
             .background(tint.opacity(0.12))
             .foregroundStyle(tint)
             .clipShape(Capsule())
+    }
+}
+
+private struct MonitorStateDial: View {
+    let isMonitoring: Bool
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(isMonitoring ? Color.green.opacity(0.16) : Color.gray.opacity(0.14))
+                .frame(width: 58, height: 58)
+            Circle()
+                .strokeBorder(isMonitoring ? Color.green.opacity(0.45) : Color.secondary.opacity(0.18), lineWidth: 1)
+                .frame(width: 58, height: 58)
+            Image(systemName: isMonitoring ? "sensor.tag.radiowaves.forward.fill" : "sensor.tag.radiowaves.forward")
+                .font(.system(size: 27, weight: .semibold))
+                .foregroundStyle(isMonitoring ? .green : .secondary)
+        }
+        .accessibilityIdentifier("monitor.state.dial")
+    }
+}
+
+private struct BackendStatusPill: View {
+    let title: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption.weight(.bold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(tint.opacity(0.12))
+            .foregroundStyle(tint)
+            .clipShape(Capsule())
+    }
+}
+
+private struct BackendFunctionTile: View {
+    let title: String
+    let value: String
+    let detail: String
+    let systemImage: String
+    let tint: Color
+    let identifier: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 34, height: 34)
+                    .background(tint.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                Spacer(minLength: 4)
+                Text(value)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(tint)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
+        .background(Color(.secondarySystemGroupedBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(tint.opacity(0.12), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(identifier)
+    }
+}
+
+private struct ProductionActionButtonStyle: ButtonStyle {
+    let tint: Color
+    var isProminent = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.78)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
+            .foregroundStyle(isProminent ? .white : tint)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isProminent ? tint : tint.opacity(0.11))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(tint.opacity(isProminent ? 0 : 0.20), lineWidth: 1)
+            )
+            .opacity(configuration.isPressed ? 0.72 : 1)
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
     }
 }
 
