@@ -27,6 +27,7 @@ final class BabyMontUITests: XCTestCase {
         app.tabBars.buttons["Settings"].tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["settings.manualCritical"].exists)
+        XCTAssertTrue(app.buttons["settings.audioAlert"].exists)
         XCTAssertTrue(app.buttons["settings.cloud.refresh"].exists)
 
         app.tabBars.buttons["Monitor"].tap()
@@ -75,6 +76,22 @@ final class BabyMontUITests: XCTestCase {
         let settingsCloudStatus = app.staticTexts["settings.cloud.status"]
         XCTAssertTrue(settingsCloudStatus.waitForExistence(timeout: 5))
         XCTAssertEqual(settingsCloudStatus.label, "CloudKit synced 1 events")
+    }
+
+    @MainActor
+    func testAudioAlertEndToEndFromSettingsToEventsAndCloud() {
+        app.tabBars.buttons["Settings"].tap()
+        XCTAssertTrue(app.buttons["settings.audioAlert"].waitForExistence(timeout: 5))
+
+        app.buttons["settings.audioAlert"].tap()
+        app.tabBars.buttons["Monitor"].tap()
+        XCTAssertTrue(app.staticTexts["Attention alert recorded"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["CloudKit saved Baby crying detected"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Crying"].waitForExistence(timeout: 5))
+
+        app.tabBars.buttons["Events"].tap()
+        XCTAssertTrue(app.staticTexts["Baby crying detected"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Crying"].waitForExistence(timeout: 5))
     }
 
     @MainActor

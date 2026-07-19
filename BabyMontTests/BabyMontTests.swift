@@ -311,6 +311,34 @@ struct BabyMonitorViewModelTests {
         #expect(viewModel.cloudEventCount == 1)
         #expect(viewModel.cloudStatusMessage == "CloudKit synced 1 events")
     }
+
+    @Test func simulatedAudioAlertUsesRuleEngineNotificationStoreAndCloud() async {
+        let services = MockServices()
+        services.alertRules.candidates = [
+            AlertCandidate(
+                category: .audio,
+                severity: .warning,
+                title: "Baby crying detected",
+                detail: "Audio classification is crying at 94% confidence.",
+                confidence: 0.94,
+                metadata: ["source": "audio_rule_engine", "classification": "crying"],
+                shouldNotify: true,
+                shouldEscalateToWatch: false
+            )
+        ]
+        let viewModel = BabyMonitorViewModel(dependencies: services.dependencies)
+
+        await viewModel.simulateAudioAlert()
+
+        #expect(services.alertRules.evaluatedSnapshots.first?.audio.classification == .crying)
+        #expect(services.alertRules.evaluatedSnapshots.first?.audio.classificationConfidence == 0.94)
+        #expect(services.push.sentAlerts.first?.title == "Baby crying detected")
+        #expect(services.home.handledAlerts.first?.category == .audio)
+        #expect(services.store.savedEvents.contains { $0.title == "Crying" && $0.category == .audio })
+        #expect(services.store.savedEvents.contains { $0.title == "Baby crying detected" && $0.didRequestPush })
+        #expect(services.cloud.savedEvents.contains { $0.title == "Baby crying detected" })
+        #expect(viewModel.statusMessage == "Attention alert recorded")
+    }
 }
 
 @MainActor
@@ -403,10 +431,12 @@ private final class MockMotionMonitoringService: MotionMonitoringService {
 @MainActor
 private final class MockAlertRuleEvaluator: AlertRuleEvaluating {
     private(set) var didResetCooldowns = false
+    private(set) var evaluatedSnapshots: [MonitoringSnapshot] = []
     var candidates: [AlertCandidate] = []
 
     func evaluate(_ snapshot: MonitoringSnapshot, configuration: AlertRuleConfiguration) -> [AlertCandidate] {
-        candidates
+        evaluatedSnapshots.append(snapshot)
+        return candidates
     }
 
     func resetCooldowns() {

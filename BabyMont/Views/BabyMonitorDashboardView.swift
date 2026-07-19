@@ -585,6 +585,13 @@ struct MonitorSettingsView: View {
                     Label("Send Manual Critical Test", systemImage: "exclamationmark.triangle")
                 }
                 .accessibilityIdentifier("settings.manualCritical")
+
+                Button {
+                    Task { await viewModel.simulateAudioAlert() }
+                } label: {
+                    Label("Send Audio Alert Test", systemImage: "waveform.badge.exclamationmark")
+                }
+                .accessibilityIdentifier("settings.audioAlert")
             }
         }
         .navigationTitle("Settings")

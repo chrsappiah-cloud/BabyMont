@@ -92,6 +92,39 @@ final class BabyMonitorViewModel: ObservableObject {
         await handle(candidate)
     }
 
+    func simulateAudioAlert() async {
+        let event = AudioAnalysisEvent(
+            timestamp: .now,
+            classification: .crying,
+            confidence: 0.94,
+            level: 0.88
+        )
+        let audioSignal = AudioSignal(
+            state: .active,
+            decibels: 0.88,
+            sustainedNoiseSeconds: max(0, min(alertConfiguration.noiseDuration - 1, 3)),
+            classification: .crying,
+            classificationConfidence: 0.94,
+            lastEvent: event
+        )
+        let testSnapshot = MonitoringSnapshot(
+            camera: snapshot.camera,
+            audio: audioSignal,
+            motion: snapshot.motion,
+            temperature: snapshot.temperature,
+            humidity: snapshot.humidity,
+            capturedAt: .now
+        )
+        snapshot = testSnapshot
+        persistAudioEventIfNeeded(audioSignal)
+
+        let candidates = dependencies.alertRules.evaluate(testSnapshot, configuration: alertConfiguration)
+        activeAlerts = candidates
+        for candidate in candidates {
+            await handle(candidate)
+        }
+    }
+
     func captureSnapshot() {
         guard let image = dependencies.camera.captureSnapshot() else {
             statusMessage = "No camera frame available for snapshot"
