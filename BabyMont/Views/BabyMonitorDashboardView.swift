@@ -55,7 +55,7 @@ struct BabyMonitorDashboardView: View {
     }
 
     private var controls: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+        VStack(spacing: 12) {
             Button {
                 Task {
                     if viewModel.isMonitoring {
@@ -70,210 +70,7 @@ struct BabyMonitorDashboardView: View {
             }
             .buttonStyle(ProductionActionButtonStyle(tint: viewModel.isMonitoring ? .orange : .green, isProminent: true))
             .accessibilityIdentifier("button.monitor.toggle")
-
-            Button {
-                Task { await viewModel.requestNotificationReadiness() }
-            } label: {
-                Label("APNs", systemImage: "bell.badge")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(ProductionActionButtonStyle(tint: .indigo))
-            .accessibilityIdentifier("button.apns.readiness")
-
-            Button {
-                Task { await viewModel.simulateCriticalAlert() }
-            } label: {
-                Label("Test", systemImage: "exclamationmark.triangle")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(ProductionActionButtonStyle(tint: .red))
-            .accessibilityIdentifier("button.test.alert")
-
-            Button {
-                Task { await viewModel.refreshCloudEvents() }
-            } label: {
-                Label("Sync", systemImage: "arrow.triangle.2.circlepath")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(ProductionActionButtonStyle(tint: .blue))
-            .accessibilityIdentifier("button.cloud.sync")
         }
-    }
-
-    private var backendOperationsPanel: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Backend Operations")
-                        .font(.headline)
-                    Text("Local-first service mesh")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                BackendStatusPill(
-                    title: viewModel.cloudIsAvailable ? "Online" : "Offline",
-                    systemImage: viewModel.cloudIsAvailable ? "checkmark.seal.fill" : "exclamationmark.triangle.fill",
-                    tint: viewModel.cloudIsAvailable ? .green : .orange
-                )
-            }
-
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                BackendFunctionTile(
-                    title: "APNs",
-                    value: viewModel.pushAuthorizationState.title,
-                    detail: viewModel.deviceTokenSummary,
-                    systemImage: "bell.and.waves.left.and.right.fill",
-                    tint: .indigo,
-                    identifier: "backend.apns"
-                )
-                BackendFunctionTile(
-                    title: "CloudKit",
-                    value: viewModel.cloudIsAvailable ? "Ready" : "Offline",
-                    detail: viewModel.cloudStatusMessage,
-                    systemImage: "icloud.fill",
-                    tint: .blue,
-                    identifier: "readiness.cloud"
-                )
-                BackendFunctionTile(
-                    title: "Watch",
-                    value: viewModel.watchState.title,
-                    detail: "Escalation channel",
-                    systemImage: "applewatch.radiowaves.left.and.right",
-                    tint: .orange,
-                    identifier: "backend.watch"
-                )
-                BackendFunctionTile(
-                    title: "HomeKit",
-                    value: viewModel.homeAutomationIsAvailable ? "Ready" : "Optional",
-                    detail: viewModel.homeAutomationStatusMessage,
-                    systemImage: "homekit",
-                    tint: .purple,
-                    identifier: "backend.homekit"
-                )
-                BackendFunctionTile(
-                    title: "Date & Time",
-                    value: viewModel.currentDateTimeSummary,
-                    detail: "Apple device clock",
-                    systemImage: "clock.fill",
-                    tint: .pink,
-                    identifier: "backend.datetime"
-                )
-                BackendFunctionTile(
-                    title: "Location",
-                    value: viewModel.snapshot.location.state.title,
-                    detail: viewModel.locationDetail,
-                    systemImage: "location.fill",
-                    tint: .mint,
-                    identifier: "backend.location"
-                )
-            }
-
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                Button {
-                    Task { await viewModel.requestNotificationReadiness() }
-                } label: {
-                    Label("Prepare", systemImage: "bell.badge.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(ProductionActionButtonStyle(tint: .indigo))
-                .accessibilityIdentifier("backend.prepare")
-
-                Button {
-                    Task { await viewModel.refreshCloudEvents() }
-                } label: {
-                    Label("Sync", systemImage: "arrow.triangle.2.circlepath.icloud")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(ProductionActionButtonStyle(tint: .blue))
-                .accessibilityIdentifier("backend.sync")
-
-                Button {
-                    Task { await viewModel.captureLocationCheckpoint() }
-                } label: {
-                    Label("Locate", systemImage: "location.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(ProductionActionButtonStyle(tint: .mint))
-                .accessibilityIdentifier("button.location.checkpoint")
-            }
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(.systemBackground))
-                .shadow(color: Color.black.opacity(0.05), radius: 12, x: 0, y: 6)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color(.separator).opacity(0.25), lineWidth: 1)
-        )
-        .accessibilityIdentifier("panel.backend.operations")
-    }
-
-    private var readinessPanel: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Production Readiness")
-                    .font(.headline)
-                Spacer()
-                Button {
-                    Task { await viewModel.refreshCloudEvents() }
-                } label: {
-                    Label("Sync", systemImage: "arrow.triangle.2.circlepath")
-                }
-                .buttonStyle(ProductionActionButtonStyle(tint: .blue))
-                .accessibilityIdentifier("button.cloud.sync.readiness")
-            }
-
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                ReadinessTile(
-                    title: "Camera",
-                    value: viewModel.snapshot.camera.state.title,
-                    detail: "\(viewModel.snapshot.camera.capturedFrameCount) frames",
-                    systemImage: "video.fill",
-                    tint: viewModel.snapshot.camera.state == .active ? .green : .secondary
-                )
-                ReadinessTile(
-                    title: "Audio",
-                    value: viewModel.snapshot.audio.state.title,
-                    detail: viewModel.snapshot.audio.classification.title,
-                    systemImage: "waveform",
-                    tint: viewModel.snapshot.audio.state == .active ? .orange : .secondary
-                )
-                ReadinessTile(
-                    title: "CloudKit",
-                    value: viewModel.cloudIsAvailable ? "Ready" : "Offline",
-                    detail: viewModel.cloudStatusMessage,
-                    systemImage: "icloud.fill",
-                    tint: viewModel.cloudIsAvailable ? .blue : .secondary,
-                    identifier: "readiness.cloud"
-                )
-                ReadinessTile(
-                    title: "HomeKit",
-                    value: viewModel.homeAutomationIsAvailable ? "Ready" : "Optional",
-                    detail: viewModel.homeAutomationStatusMessage,
-                    systemImage: "homekit",
-                    tint: viewModel.homeAutomationIsAvailable ? .purple : .secondary,
-                    identifier: "readiness.home"
-                )
-                ReadinessTile(
-                    title: "Location",
-                    value: viewModel.snapshot.location.state.title,
-                    detail: viewModel.locationDetail,
-                    systemImage: "location.fill",
-                    tint: viewModel.snapshot.location.state == .active ? .mint : .secondary,
-                    identifier: "readiness.location"
-                )
-            }
-        }
-        .padding(16)
-        .background(Color(.systemBackground))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color(.separator).opacity(0.25), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var cameraPreview: some View {
@@ -369,47 +166,6 @@ struct BabyMonitorDashboardView: View {
         }
     }
 
-    private var alertRules: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Alert Rules")
-                .font(.headline)
-
-            VStack(spacing: 12) {
-                SliderRow(
-                    title: "Noise threshold",
-                    value: $viewModel.alertConfiguration.noiseThreshold,
-                    range: 0.1...1,
-                    identifier: "slider.noise.threshold"
-                )
-                SliderRow(
-                    title: "Stillness threshold",
-                    value: $viewModel.alertConfiguration.stillnessThreshold,
-                    range: 0...0.5,
-                    identifier: "slider.stillness.threshold"
-                )
-                SliderRow(
-                    title: "Low humidity",
-                    value: $viewModel.alertConfiguration.lowHumidityPercent,
-                    range: 15...45,
-                    format: .wholeNumber,
-                    identifier: "slider.humidity.low"
-                )
-                SliderRow(
-                    title: "High humidity",
-                    value: $viewModel.alertConfiguration.highHumidityPercent,
-                    range: 55...80,
-                    format: .wholeNumber,
-                    identifier: "slider.humidity.high"
-                )
-                Toggle("Low light attention alerts", isOn: $viewModel.alertConfiguration.lowLightEscalates)
-                    .accessibilityIdentifier("toggle.lowLight")
-            }
-        }
-        .padding(16)
-        .background(.background)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-
     private var eventTimeline: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Local Event Store")
@@ -493,7 +249,6 @@ struct BackendOperationsView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(ProductionActionButtonStyle(tint: .indigo))
-                .accessibilityIdentifier("backend.prepare")
                 .accessibilityIdentifier("settings.notifications")
 
                 Button {

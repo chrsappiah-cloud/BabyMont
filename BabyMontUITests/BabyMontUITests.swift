@@ -72,20 +72,20 @@ final class BabyMontUITests: XCTestCase {
     func testHeaderControlsAndFooterTabsActivateEndToEndOnDevice() {
         XCTAssertTrue(app.staticTexts["BabyMont Nursery Command"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["button.monitor.toggle"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["button.apns.readiness"].exists)
-        XCTAssertTrue(app.buttons["button.test.alert"].exists)
-        XCTAssertTrue(app.buttons["button.cloud.sync"].exists)
 
         app.buttons["button.monitor.toggle"].tap()
         XCTAssertTrue(app.staticTexts["Monitoring locally"].waitForExistence(timeout: 5))
 
-        app.buttons["button.apns.readiness"].tap()
+        app.tabBars.buttons["Backend"].tap()
+        XCTAssertTrue(app.navigationBars["Backend"].waitForExistence(timeout: 3))
+
+        app.buttons["settings.notifications"].tap()
         XCTAssertTrue(app.staticTexts["CloudKit ready"].waitForExistence(timeout: 5))
 
-        app.buttons["button.test.alert"].tap()
+        app.buttons["settings.manualCritical"].tap()
         XCTAssertTrue(app.staticTexts["CloudKit saved Manual test alert"].waitForExistence(timeout: 5))
 
-        app.buttons["button.cloud.sync"].tap()
+        app.buttons["backend.sync"].tap()
         XCTAssertTrue(app.staticTexts["CloudKit synced 2 events"].waitForExistence(timeout: 5))
 
         app.tabBars.buttons["Events"].tap()
@@ -97,10 +97,6 @@ final class BabyMontUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Rules"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.sliders["rules.noise.threshold"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.sliders["rules.stillness.threshold"].exists)
-
-        app.tabBars.buttons["Backend"].tap()
-        XCTAssertTrue(app.navigationBars["Backend"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.otherElements["readiness.cloud"].waitForExistence(timeout: 3))
 
         app.tabBars.buttons["Settings"].tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
@@ -152,7 +148,8 @@ final class BabyMontUITests: XCTestCase {
 
     @MainActor
     func testManualCriticalAlertAppearsInEventHistoryAndSettings() {
-        app.buttons["button.test.alert"].tap()
+        app.tabBars.buttons["Backend"].tap()
+        app.buttons["settings.manualCritical"].tap()
         XCTAssertTrue(app.staticTexts["Critical alert escalated"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["CloudKit saved Manual test alert"].waitForExistence(timeout: 5))
 
