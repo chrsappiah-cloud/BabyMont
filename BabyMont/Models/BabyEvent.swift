@@ -7,6 +7,7 @@ enum BabyEventCategory: String, CaseIterable, Identifiable, Codable {
     case motion
     case temperature
     case humidity
+    case location
     case alert
     case watch
     case system
@@ -20,6 +21,7 @@ enum BabyEventCategory: String, CaseIterable, Identifiable, Codable {
         case .motion: "Motion"
         case .temperature: "Temperature"
         case .humidity: "Humidity"
+        case .location: "Location"
         case .alert: "Alert"
         case .watch: "Watch"
         case .system: "System"
@@ -57,16 +59,16 @@ enum BabyEventSeverity: String, CaseIterable, Identifiable, Codable, Comparable 
 
 @Model
 final class BabyEvent {
-    var id: UUID
-    var timestamp: Date
-    var categoryRawValue: String
-    var severityRawValue: String
-    var title: String
-    var detail: String
+    var id: UUID = UUID()
+    var timestamp: Date = Date()
+    var categoryRawValue: String = BabyEventCategory.system.rawValue
+    var severityRawValue: String = BabyEventSeverity.info.rawValue
+    var title: String = ""
+    var detail: String = ""
     var confidence: Double = 1
     var metadataJSON: String = "{}"
-    var didEscalateToWatch: Bool
-    var didRequestPush: Bool
+    var didEscalateToWatch: Bool = false
+    var didRequestPush: Bool = false
 
     init(
         id: UUID = UUID(),

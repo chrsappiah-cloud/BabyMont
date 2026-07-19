@@ -11,11 +11,20 @@ final class BabyMonitorViewModel: ObservableObject {
     @Published private(set) var isMonitoring = false
     @Published private(set) var statusMessage = "Local monitor ready"
     @Published private(set) var lastSnapshot: UIImage?
+    @Published private(set) var cloudStatusMessage = "Cloud sync not checked"
+    @Published private(set) var cloudEventCount = 0
+    @Published private(set) var homeAutomationStatusMessage = "HomeKit not checked"
     @Published var alertConfiguration = AlertRuleConfiguration()
 
     private var dependencies: AppDependencies
     private var refreshTask: Task<Void, Never>?
     private var lastAudioEventDates: [AudioClassification: Date] = [:]
+    private static let dateTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .medium
+        return formatter
+    }()
 
     init() {
         self.dependencies = .preview
@@ -30,11 +39,14 @@ final class BabyMonitorViewModel: ObservableObject {
         self.dependencies.push.configure()
         self.dependencies.watch.configure()
         recentEvents = dependencies.eventStore.recentEvents(limit: 12)
+        cloudStatusMessage = dependencies.cloudSync.isAvailable ? "CloudKit available" : "Checking CloudKit"
+        homeAutomationStatusMessage = dependencies.homeAutomation.isAvailable ? "HomeKit ready" : "Checking HomeKit"
 
         Task { [dependencies] in
             await dependencies.cloudSync.configure()
             await dependencies.homeAutomation.configure()
             dependencies.homeAutomation.selectNurseryRoom(named: "Nursery")
+            refreshReadinessState()
         }
     }
 
@@ -42,16 +54,29 @@ final class BabyMonitorViewModel: ObservableObject {
         await dependencies.push.requestAuthorization()
         dependencies.push.registerForRemoteNotifications()
         await dependencies.cloudSync.updateDeviceToken(dependencies.push.deviceToken)
+        await refreshCloudEvents()
+        refreshReadinessState()
     }
 
     func startMonitoring() async {
-        statusMessage = "Starting local camera, audio and motion services"
+        statusMessage = "Starting local camera, audio, motion and location services"
         await dependencies.camera.start()
         await dependencies.audio.start()
         await dependencies.motion.start()
+        await dependencies.location.start()
 
         isMonitoring = true
-        saveEvent(category: .system, severity: .info, title: "Monitoring started", detail: "Camera, audio and motion services are running locally.")
+        let event = saveEvent(
+            category: .system,
+            severity: .info,
+            title: "Monitoring started",
+            detail: "Camera, audio, motion and Apple location services are running locally.",
+            syncToCloud: false
+        )
+        await dependencies.cloudSync.save(event)
+        if dependencies.cloudSync.isAvailable {
+            cloudEventCount += 1
+        }
         startRefreshLoop()
     }
 
@@ -59,6 +84,7 @@ final class BabyMonitorViewModel: ObservableObject {
         dependencies.camera.stop()
         dependencies.audio.stop()
         dependencies.motion.stop()
+        dependencies.location.stop()
         refreshTask?.cancel()
         refreshTask = nil
         isMonitoring = false
@@ -84,25 +110,196 @@ final class BabyMonitorViewModel: ObservableObject {
         await handle(candidate)
     }
 
-    func captureSnapshot() {
+    func simulateAudioAlert() async {
+        let event = AudioAnalysisEvent(
+            timestamp: .now,
+            classification: .crying,
+            confidence: 0.94,
+            level: 0.88
+        )
+        let audioSignal = AudioSignal(
+            state: .active,
+            decibels: 0.88,
+            sustainedNoiseSeconds: max(0, min(alertConfiguration.noiseDuration - 1, 3)),
+            classification: .crying,
+            classificationConfidence: 0.94,
+            lastEvent: event
+        )
+        let testSnapshot = MonitoringSnapshot(
+            camera: snapshot.camera,
+            audio: audioSignal,
+            motion: snapshot.motion,
+            temperature: snapshot.temperature,
+            humidity: snapshot.humidity,
+            capturedAt: .now
+        )
+        snapshot = testSnapshot
+        persistAudioEventIfNeeded(audioSignal)
+
+        let candidates = dependencies.alertRules.evaluate(testSnapshot, configuration: alertConfiguration)
+        activeAlerts = candidates
+        for candidate in candidates {
+            await handle(candidate)
+        }
+    }
+
+    func simulateMotionAlert() async {
+        let motionSignal = MotionSignal(
+            state: .active,
+            activityScore: 0.02,
+            sustainedStillnessSeconds: alertConfiguration.stillnessDuration + 15
+        )
+        let cameraSignal = CameraSignal(
+            state: .active,
+            frameRate: max(snapshot.camera.frameRate, 24),
+            faceConfidence: max(snapshot.camera.faceConfidence, 0.88),
+            personConfidence: max(snapshot.camera.personConfidence, 0.92),
+            occupancyConfidence: max(snapshot.camera.occupancyConfidence, 0.90),
+            capturedFrameCount: max(snapshot.camera.capturedFrameCount, 1)
+        )
+        let testSnapshot = MonitoringSnapshot(
+            camera: cameraSignal,
+            audio: snapshot.audio,
+            motion: motionSignal,
+            temperature: snapshot.temperature,
+            humidity: snapshot.humidity,
+            capturedAt: .now
+        )
+
+        await evaluate(testSnapshot)
+    }
+
+    func simulateHumidityAlert() async {
+        let humiditySignal = HumiditySignal(
+            relativePercent: alertConfiguration.highHumidityPercent + 12,
+            confidence: 0.91
+        )
+        let testSnapshot = MonitoringSnapshot(
+            camera: snapshot.camera,
+            audio: snapshot.audio,
+            motion: snapshot.motion,
+            temperature: snapshot.temperature,
+            humidity: humiditySignal,
+            capturedAt: .now
+        )
+
+        await evaluate(testSnapshot)
+    }
+
+    func captureSnapshot() async {
         guard let image = dependencies.camera.captureSnapshot() else {
             statusMessage = "No camera frame available for snapshot"
             return
         }
 
         lastSnapshot = image
-        saveEvent(
+        let event = saveEvent(
             category: .camera,
             severity: .info,
             title: "Snapshot captured",
             detail: "A local nursery snapshot was captured for review.",
             confidence: dependencies.camera.signal.occupancyConfidence,
-            metadata: ["source": "camera_snapshot"]
+            metadata: [
+                "source": "camera_snapshot",
+                "frameCount": "\(dependencies.camera.signal.capturedFrameCount)"
+            ],
+            syncToCloud: false
         )
+        await dependencies.cloudSync.save(event)
+        if dependencies.cloudSync.isAvailable {
+            cloudStatusMessage = "CloudKit saved Snapshot captured"
+            cloudEventCount += 1
+        }
+        statusMessage = "Snapshot captured"
+    }
+
+    func captureLocationCheckpoint() async {
+        await dependencies.location.start()
+        let signal = dependencies.location.signal
+        snapshot = MonitoringSnapshot(
+            camera: snapshot.camera,
+            audio: snapshot.audio,
+            motion: snapshot.motion,
+            temperature: snapshot.temperature,
+            humidity: snapshot.humidity,
+            location: signal,
+            capturedAt: .now
+        )
+
+        let capturedAt = Date.now
+        let event = saveEvent(
+            category: .location,
+            severity: .info,
+            title: "Location checkpoint",
+            detail: "\(locationSummary) recorded from Apple location services at \(Self.dateTimeFormatter.string(from: capturedAt)).",
+            confidence: signal.state == .active ? 0.92 : 0.40,
+            metadata: [
+                "source": "apple_location",
+                "timestamp": ISO8601DateFormatter().string(from: capturedAt),
+                "latitude": signal.latitude.map { String(format: "%.6f", $0) } ?? "",
+                "longitude": signal.longitude.map { String(format: "%.6f", $0) } ?? "",
+                "accuracyMeters": signal.horizontalAccuracyMeters.map { String(format: "%.1f", $0) } ?? "",
+                "locality": signal.locality ?? ""
+            ],
+            syncToCloud: false
+        )
+        await dependencies.cloudSync.save(event)
+        if dependencies.cloudSync.isAvailable {
+            cloudStatusMessage = "CloudKit saved Location checkpoint"
+            cloudEventCount += 1
+        } else {
+            cloudStatusMessage = "CloudKit unavailable"
+        }
+        statusMessage = "Location checkpoint saved"
+    }
+
+    func refreshCloudEvents() async {
+        let events = await dependencies.cloudSync.fetchRecentEvents(limit: 12)
+        cloudEventCount = events.count
+        if dependencies.cloudSync.isAvailable {
+            cloudStatusMessage = events.isEmpty ? "CloudKit ready" : "CloudKit synced \(events.count) events"
+        } else {
+            cloudStatusMessage = "CloudKit unavailable"
+        }
     }
 
     var cameraSession: AVCaptureSession? {
         dependencies.camera.session
+    }
+
+    var pushAuthorizationState: MonitoringState {
+        dependencies.push.authorizationState
+    }
+
+    var watchState: MonitoringState {
+        dependencies.watch.state
+    }
+
+    var cloudIsAvailable: Bool {
+        dependencies.cloudSync.isAvailable
+    }
+
+    var homeAutomationIsAvailable: Bool {
+        dependencies.homeAutomation.isAvailable
+    }
+
+    var currentDateTimeSummary: String {
+        Self.dateTimeFormatter.string(from: snapshot.capturedAt)
+    }
+
+    var locationSummary: String {
+        snapshot.location.locality ?? snapshot.location.coordinateSummary
+    }
+
+    var locationDetail: String {
+        snapshot.location.accuracySummary
+    }
+
+    var deviceTokenSummary: String {
+        guard let token = dependencies.push.deviceToken, !token.isEmpty else {
+            return "No device token"
+        }
+        return "\(token.prefix(8))..."
     }
 
     private func startRefreshLoop() {
@@ -116,12 +313,15 @@ final class BabyMonitorViewModel: ObservableObject {
     }
 
     private func refresh() async {
+        guard isMonitoring else { return }
+
         snapshot = MonitoringSnapshot(
             camera: dependencies.camera.signal,
             audio: dependencies.audio.signal,
             motion: dependencies.motion.signal,
             temperature: TemperatureSignal(),
             humidity: HumiditySignal(),
+            location: dependencies.location.signal,
             capturedAt: .now
         )
 
@@ -133,8 +333,19 @@ final class BabyMonitorViewModel: ObservableObject {
             await handle(candidate)
         }
 
-        if candidates.isEmpty {
+        if isMonitoring, candidates.isEmpty {
             statusMessage = snapshot.isRunning ? "Monitoring locally" : "Local monitor ready"
+        }
+    }
+
+    private func evaluate(_ testSnapshot: MonitoringSnapshot) async {
+        snapshot = testSnapshot
+        persistAudioEventIfNeeded(testSnapshot.audio)
+
+        let candidates = dependencies.alertRules.evaluate(testSnapshot, configuration: alertConfiguration)
+        activeAlerts = candidates
+        for candidate in candidates {
+            await handle(candidate)
         }
     }
 
@@ -148,7 +359,7 @@ final class BabyMonitorViewModel: ObservableObject {
         }
         await dependencies.homeAutomation.handle(candidate)
 
-        saveEvent(
+        let event = saveEvent(
             category: candidate.category,
             severity: candidate.severity,
             title: candidate.title,
@@ -156,12 +367,26 @@ final class BabyMonitorViewModel: ObservableObject {
             confidence: candidate.confidence,
             metadata: candidate.metadata,
             didEscalateToWatch: didEscalate,
-            didRequestPush: candidate.shouldNotify
+            didRequestPush: candidate.shouldNotify,
+            syncToCloud: false
         )
+        await dependencies.cloudSync.save(event)
+        if dependencies.cloudSync.isAvailable {
+            cloudStatusMessage = "CloudKit saved \(event.title)"
+            cloudEventCount += 1
+        } else {
+            cloudStatusMessage = "CloudKit unavailable"
+        }
 
         statusMessage = candidate.severity == .critical ? "Critical alert escalated" : "Attention alert recorded"
     }
 
+    private func refreshReadinessState() {
+        cloudStatusMessage = dependencies.cloudSync.isAvailable ? "CloudKit ready" : "CloudKit unavailable"
+        homeAutomationStatusMessage = dependencies.homeAutomation.isAvailable ? "HomeKit ready" : "HomeKit unavailable"
+    }
+
+    @discardableResult
     private func saveEvent(
         category: BabyEventCategory,
         severity: BabyEventSeverity,
@@ -170,8 +395,9 @@ final class BabyMonitorViewModel: ObservableObject {
         confidence: Double = 1,
         metadata: [String: String] = [:],
         didEscalateToWatch: Bool = false,
-        didRequestPush: Bool = false
-    ) {
+        didRequestPush: Bool = false,
+        syncToCloud: Bool = true
+    ) -> BabyEvent {
         let event = BabyEvent(
             category: category,
             severity: severity,
@@ -184,10 +410,13 @@ final class BabyMonitorViewModel: ObservableObject {
         )
         dependencies.eventStore.save(event)
         recentEvents = dependencies.eventStore.recentEvents(limit: 12)
-        Task { [dependencies, event] in
-            await dependencies.cloudSync.save(event)
+        if syncToCloud {
+            Task { [dependencies, event] in
+                await dependencies.cloudSync.save(event)
+            }
         }
         NotificationCenter.default.post(name: .babyEventRaised, object: event)
+        return event
     }
 
     private func persistAudioEventIfNeeded(_ signal: AudioSignal) {

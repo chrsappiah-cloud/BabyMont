@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import SwiftData
 import Testing
 import UIKit
 @testable import BabyMont
@@ -44,6 +45,69 @@ struct BabyMontDomainTests {
         let events = store.recentEvents(limit: 1)
         #expect(events.count == 1)
         #expect(events.first?.id == newer.id)
+    }
+}
+
+@MainActor
+struct BabyMontArchitectureIntegrationTests {
+    @Test func allAlertUnitsPersistToSwiftDataAndRespondThroughBackendServices() async throws {
+        let container = try ModelContainer(
+            for: BabyEvent.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let services = MockServices()
+        let swiftDataStore = SwiftDataEventStore(modelContext: container.mainContext)
+        let dependencies = AppDependencies(
+            camera: services.camera,
+            audio: services.audio,
+            motion: services.motion,
+            location: services.location,
+            alertRules: BabyAlertRuleEngine(),
+            eventStore: swiftDataStore,
+            push: services.push,
+            watch: services.watch,
+            cloudSync: services.cloud,
+            homeAutomation: services.home
+        )
+        let viewModel = BabyMonitorViewModel(dependencies: dependencies)
+
+        await viewModel.startMonitoring()
+        await viewModel.simulateAudioAlert()
+        await viewModel.simulateMotionAlert()
+        await viewModel.simulateHumidityAlert()
+        await viewModel.captureSnapshot()
+        await viewModel.captureLocationCheckpoint()
+        await viewModel.simulateCriticalAlert()
+        await viewModel.refreshCloudEvents()
+
+        let persistedTitles = swiftDataStore.recentEvents(limit: 12).map(\.title)
+        #expect(persistedTitles.contains("Monitoring started"))
+        #expect(persistedTitles.contains("Crying"))
+        #expect(persistedTitles.contains("Baby crying detected"))
+        #expect(persistedTitles.contains("Prolonged low movement"))
+        #expect(persistedTitles.contains("Nursery humidity high"))
+        #expect(persistedTitles.contains("Snapshot captured"))
+        #expect(persistedTitles.contains("Location checkpoint"))
+        #expect(persistedTitles.contains("Manual test alert"))
+
+        #expect(services.push.sentAlerts.map(\.title).contains("Baby crying detected"))
+        #expect(services.push.sentAlerts.map(\.title).contains("Prolonged low movement"))
+        #expect(services.push.sentAlerts.map(\.title).contains("Nursery humidity high"))
+        #expect(services.push.sentAlerts.map(\.title).contains("Manual test alert"))
+        #expect(services.watch.escalatedAlerts.map(\.category).contains(.motion))
+        #expect(services.watch.escalatedAlerts.map(\.category).contains(.humidity))
+        #expect(services.watch.escalatedAlerts.map(\.category).contains(.alert))
+        #expect(services.home.handledAlerts.map(\.category).contains(.audio))
+        #expect(services.home.handledAlerts.map(\.category).contains(.motion))
+        #expect(services.home.handledAlerts.map(\.category).contains(.humidity))
+        #expect(services.cloud.savedEvents.map(\.title).contains("Baby crying detected"))
+        #expect(services.cloud.savedEvents.map(\.title).contains("Prolonged low movement"))
+        #expect(services.cloud.savedEvents.map(\.title).contains("Nursery humidity high"))
+        #expect(services.cloud.savedEvents.map(\.title).contains("Snapshot captured"))
+        #expect(services.cloud.savedEvents.map(\.title).contains("Location checkpoint"))
+        #expect(services.cloud.savedEvents.map(\.title).contains("Manual test alert"))
+        #expect(viewModel.recentEvents.map(\.title).contains("Manual test alert"))
+        #expect(viewModel.cloudEventCount == services.cloud.savedEvents.count)
     }
 }
 
@@ -243,6 +307,7 @@ struct BabyMonitorViewModelTests {
         #expect(services.camera.didStart)
         #expect(services.audio.didStart)
         #expect(services.motion.didStart)
+        #expect(services.location.didStart)
         #expect(services.store.savedEvents.contains { $0.title == "Monitoring started" })
 
         viewModel.stopMonitoring()
@@ -251,8 +316,30 @@ struct BabyMonitorViewModelTests {
         #expect(services.camera.didStop)
         #expect(services.audio.didStop)
         #expect(services.motion.didStop)
+        #expect(services.location.didStop)
         #expect(services.alertRules.didResetCooldowns)
         #expect(services.store.savedEvents.contains { $0.title == "Monitoring stopped" })
+    }
+
+    @Test func locationCheckpointPersistsTimestampCoordinateAndCloudSync() async {
+        let services = MockServices()
+        let viewModel = BabyMonitorViewModel(dependencies: services.dependencies)
+
+        await viewModel.captureLocationCheckpoint()
+
+        #expect(services.location.didStart)
+        #expect(viewModel.snapshot.location.latitude == 5.6037)
+        #expect(viewModel.snapshot.location.longitude == -0.1870)
+        #expect(viewModel.statusMessage == "Location checkpoint saved")
+        #expect(viewModel.cloudStatusMessage == "CloudKit saved Location checkpoint")
+        #expect(services.store.savedEvents.contains { event in
+            event.title == "Location checkpoint" &&
+            event.category == .location &&
+            event.metadata["source"] == "apple_location" &&
+            event.metadata["latitude"] == "5.603700" &&
+            event.metadata["longitude"] == "-0.187000"
+        })
+        #expect(services.cloud.savedEvents.contains { $0.title == "Location checkpoint" && $0.category == .location })
     }
 
     @Test func manualCriticalAlertUsesPushWatchHomeStoreAndCloud() async {
@@ -269,6 +356,7 @@ struct BabyMonitorViewModelTests {
         #expect(services.store.savedEvents.first?.didEscalateToWatch == true)
         #expect(services.cloud.savedEvents.contains { $0.title == "Manual test alert" })
         #expect(viewModel.statusMessage == "Critical alert escalated")
+        #expect(viewModel.cloudStatusMessage == "CloudKit saved Manual test alert")
     }
 
     @Test func configurePreparesPushWatchCloudAndHome() async {
@@ -283,6 +371,137 @@ struct BabyMonitorViewModelTests {
         #expect(services.cloud.didConfigure)
         #expect(services.home.selectedRoomName == "Nursery")
     }
+
+    @Test func notificationReadinessUpdatesDeviceTokenAndCloudEvents() async {
+        let services = MockServices()
+        let viewModel = BabyMonitorViewModel(dependencies: services.dependencies)
+
+        await viewModel.requestNotificationReadiness()
+
+        #expect(services.push.didRequestAuthorization)
+        #expect(services.push.didRegisterForRemoteNotifications)
+        #expect(services.cloud.updatedDeviceTokens == ["mock-device-token"])
+        #expect(viewModel.pushAuthorizationState == .active)
+        #expect(viewModel.deviceTokenSummary == "mock-dev...")
+        #expect(viewModel.cloudStatusMessage == "CloudKit ready")
+    }
+
+    @Test func refreshCloudEventsSurfacesFetchedCloudCount() async {
+        let services = MockServices()
+        services.cloud.seed([
+            BabyEvent(category: .alert, severity: .warning, title: "Cloud warning", detail: "Fetched from CloudKit")
+        ])
+        let viewModel = BabyMonitorViewModel(dependencies: services.dependencies)
+
+        await viewModel.refreshCloudEvents()
+
+        #expect(viewModel.cloudEventCount == 1)
+        #expect(viewModel.cloudStatusMessage == "CloudKit synced 1 events")
+    }
+
+    @Test func simulatedAudioAlertUsesRuleEngineNotificationStoreAndCloud() async {
+        let services = MockServices()
+        services.alertRules.candidates = [
+            AlertCandidate(
+                category: .audio,
+                severity: .warning,
+                title: "Baby crying detected",
+                detail: "Audio classification is crying at 94% confidence.",
+                confidence: 0.94,
+                metadata: ["source": "audio_rule_engine", "classification": "crying"],
+                shouldNotify: true,
+                shouldEscalateToWatch: false
+            )
+        ]
+        let viewModel = BabyMonitorViewModel(dependencies: services.dependencies)
+
+        await viewModel.simulateAudioAlert()
+
+        #expect(services.alertRules.evaluatedSnapshots.first?.audio.classification == .crying)
+        #expect(services.alertRules.evaluatedSnapshots.first?.audio.classificationConfidence == 0.94)
+        #expect(services.push.sentAlerts.first?.title == "Baby crying detected")
+        #expect(services.home.handledAlerts.first?.category == .audio)
+        #expect(services.store.savedEvents.contains { $0.title == "Crying" && $0.category == .audio })
+        #expect(services.store.savedEvents.contains { $0.title == "Baby crying detected" && $0.didRequestPush })
+        #expect(services.cloud.savedEvents.contains { $0.title == "Baby crying detected" })
+        #expect(viewModel.statusMessage == "Attention alert recorded")
+    }
+
+    @Test func simulatedMotionAlertUsesRuleEngineNotificationStoreWatchAndCloud() async {
+        let services = MockServices()
+        services.alertRules.candidates = [
+            AlertCandidate(
+                category: .motion,
+                severity: .critical,
+                title: "Prolonged low movement",
+                detail: "Motion stayed below threshold for 75 seconds.",
+                confidence: 0.91,
+                metadata: ["source": "motion_rule_engine", "stillness": "75"],
+                shouldNotify: true,
+                shouldEscalateToWatch: true
+            )
+        ]
+        let viewModel = BabyMonitorViewModel(dependencies: services.dependencies)
+
+        await viewModel.simulateMotionAlert()
+
+        #expect(services.alertRules.evaluatedSnapshots.first?.motion.activityScore == 0.02)
+        #expect(services.alertRules.evaluatedSnapshots.first?.motion.sustainedStillnessSeconds == 75)
+        #expect(services.alertRules.evaluatedSnapshots.first?.camera.facePresent == true)
+        #expect(services.push.sentAlerts.first?.title == "Prolonged low movement")
+        #expect(services.watch.escalatedAlerts.first?.category == .motion)
+        #expect(services.home.handledAlerts.first?.category == .motion)
+        #expect(services.store.savedEvents.contains { $0.title == "Prolonged low movement" && $0.didEscalateToWatch })
+        #expect(services.cloud.savedEvents.contains { $0.title == "Prolonged low movement" })
+        #expect(viewModel.statusMessage == "Critical alert escalated")
+    }
+
+    @Test func simulatedHumidityAlertUsesRuleEngineNotificationStoreWatchAndCloud() async {
+        let services = MockServices()
+        services.alertRules.candidates = [
+            AlertCandidate(
+                category: .humidity,
+                severity: .critical,
+                title: "Nursery humidity high",
+                detail: "Relative humidity is 77%.",
+                confidence: 0.91,
+                metadata: ["source": "humidity_rule_engine", "relativeHumidity": "77"],
+                shouldNotify: true,
+                shouldEscalateToWatch: true
+            )
+        ]
+        let viewModel = BabyMonitorViewModel(dependencies: services.dependencies)
+
+        await viewModel.simulateHumidityAlert()
+
+        #expect(services.alertRules.evaluatedSnapshots.first?.humidity.relativePercent == 77)
+        #expect(services.alertRules.evaluatedSnapshots.first?.humidity.confidence == 0.91)
+        #expect(services.push.sentAlerts.first?.title == "Nursery humidity high")
+        #expect(services.watch.escalatedAlerts.first?.category == .humidity)
+        #expect(services.home.handledAlerts.first?.category == .humidity)
+        #expect(services.store.savedEvents.contains { $0.title == "Nursery humidity high" && $0.didRequestPush })
+        #expect(services.cloud.savedEvents.contains { $0.title == "Nursery humidity high" })
+        #expect(viewModel.statusMessage == "Critical alert escalated")
+    }
+
+    @Test func snapshotCapturePersistsLocalImageEventAndCloudSync() async {
+        let services = MockServices()
+        let viewModel = BabyMonitorViewModel(dependencies: services.dependencies)
+
+        await services.camera.start()
+        await viewModel.captureSnapshot()
+
+        #expect(viewModel.lastSnapshot != nil)
+        #expect(viewModel.statusMessage == "Snapshot captured")
+        #expect(viewModel.cloudStatusMessage == "CloudKit saved Snapshot captured")
+        #expect(services.store.savedEvents.contains { event in
+            event.title == "Snapshot captured" &&
+            event.category == .camera &&
+            event.metadata["source"] == "camera_snapshot" &&
+            event.metadata["frameCount"] == "24"
+        })
+        #expect(services.cloud.savedEvents.contains { $0.title == "Snapshot captured" && $0.category == .camera })
+    }
 }
 
 @MainActor
@@ -290,6 +509,7 @@ private final class MockServices {
     let camera = MockCameraMonitoringService()
     let audio = MockAudioMonitoringService()
     let motion = MockMotionMonitoringService()
+    let location = MockLocationTrackingService()
     let alertRules = MockAlertRuleEvaluator()
     let store = MockEventStoreService()
     let push = MockPushNotificationService()
@@ -302,6 +522,7 @@ private final class MockServices {
             camera: camera,
             audio: audio,
             motion: motion,
+            location: location,
             alertRules: alertRules,
             eventStore: store,
             push: push,
@@ -317,12 +538,20 @@ private final class MockCameraMonitoringService: CameraMonitoringService {
     private(set) var signal = CameraSignal(state: .idle)
     var session: AVCaptureSession? { nil }
     var latestFrame: VisionFrame? { nil }
+    var shouldReturnSnapshot = true
     private(set) var didStart = false
     private(set) var didStop = false
 
     func start() async {
         didStart = true
-        signal = CameraSignal(state: .active, frameRate: 30, faceConfidence: 0.85, personConfidence: 0.92)
+        signal = CameraSignal(
+            state: .active,
+            frameRate: 30,
+            faceConfidence: 0.85,
+            personConfidence: 0.92,
+            occupancyConfidence: 0.92,
+            capturedFrameCount: 24
+        )
     }
 
     func stop() {
@@ -331,7 +560,11 @@ private final class MockCameraMonitoringService: CameraMonitoringService {
     }
 
     func captureSnapshot() -> UIImage? {
-        nil
+        guard shouldReturnSnapshot else { return nil }
+        return UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { context in
+            UIColor.systemIndigo.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
+        }
     }
 }
 
@@ -373,12 +606,48 @@ private final class MockMotionMonitoringService: MotionMonitoringService {
 }
 
 @MainActor
+private final class MockLocationTrackingService: LocationTrackingService {
+    private(set) var signal = LocationSignal(state: .idle)
+    private(set) var didRequestAuthorization = false
+    private(set) var didStart = false
+    private(set) var didStop = false
+
+    func requestAuthorization() async {
+        didRequestAuthorization = true
+        signal = activeSignal()
+    }
+
+    func start() async {
+        didStart = true
+        signal = activeSignal()
+    }
+
+    func stop() {
+        didStop = true
+        signal = LocationSignal(state: .idle)
+    }
+
+    private func activeSignal() -> LocationSignal {
+        LocationSignal(
+            state: .active,
+            latitude: 5.6037,
+            longitude: -0.1870,
+            horizontalAccuracyMeters: 12,
+            capturedAt: Date(timeIntervalSince1970: 1_782_848_800),
+            locality: "Accra nursery"
+        )
+    }
+}
+
+@MainActor
 private final class MockAlertRuleEvaluator: AlertRuleEvaluating {
     private(set) var didResetCooldowns = false
+    private(set) var evaluatedSnapshots: [MonitoringSnapshot] = []
     var candidates: [AlertCandidate] = []
 
     func evaluate(_ snapshot: MonitoringSnapshot, configuration: AlertRuleConfiguration) -> [AlertCandidate] {
-        candidates
+        evaluatedSnapshots.append(snapshot)
+        return candidates
     }
 
     func resetCooldowns() {
@@ -468,6 +737,10 @@ private final class MockCloudSyncService: CloudSyncServicing {
 
     func fetchRecentEvents(limit: Int) async -> [BabyEvent] {
         Array(savedEvents.prefix(limit))
+    }
+
+    func seed(_ events: [BabyEvent]) {
+        savedEvents = events
     }
 }
 

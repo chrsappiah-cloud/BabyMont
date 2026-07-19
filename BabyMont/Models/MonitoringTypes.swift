@@ -93,12 +93,36 @@ struct HumiditySignal: Equatable {
     var confidence: Double = 0
 }
 
+struct LocationSignal: Equatable {
+    var state: MonitoringState = .idle
+    var latitude: Double?
+    var longitude: Double?
+    var horizontalAccuracyMeters: Double?
+    var capturedAt: Date?
+    var locality: String?
+
+    var coordinateSummary: String {
+        guard let latitude, let longitude else {
+            return "No location"
+        }
+        return String(format: "%.4f, %.4f", latitude, longitude)
+    }
+
+    var accuracySummary: String {
+        guard let horizontalAccuracyMeters else {
+            return state.detail
+        }
+        return "Accuracy \(Int(horizontalAccuracyMeters))m"
+    }
+}
+
 struct MonitoringSnapshot: Equatable {
     var camera: CameraSignal = CameraSignal()
     var audio: AudioSignal = AudioSignal()
     var motion: MotionSignal = MotionSignal()
     var temperature: TemperatureSignal = TemperatureSignal()
     var humidity: HumiditySignal = HumiditySignal()
+    var location: LocationSignal = LocationSignal()
     var capturedAt: Date = .now
 
     var isRunning: Bool {

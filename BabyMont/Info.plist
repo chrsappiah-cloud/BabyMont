@@ -10,6 +10,8 @@
 	<string>BabyMont uses motion signals to help detect prolonged stillness while monitoring.</string>
 	<key>NSHomeKitUsageDescription</key>
 	<string>BabyMont can trigger optional nursery HomeKit scenes for critical baby alerts.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>BabyMont uses Apple location services to attach local date, time and location checkpoints to nursery monitoring events.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
