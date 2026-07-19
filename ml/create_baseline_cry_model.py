@@ -56,18 +56,21 @@ def convert(model: tf.keras.Model, output_path: Path) -> None:
     classifier_config = ct.ClassifierConfig(
         class_labels=CLASSES,
         predicted_feature_name="classLabel",
-        predicted_probabilities_output="classProbability",
     )
     mlmodel = ct.convert(
         model,
         inputs=[ct.TensorType(name="input", shape=(1, TIME_STEPS, N_MELS, 1), dtype=np.float32)],
         classifier_config=classifier_config,
-        minimum_deployment_target=ct.target.iOS17,
+        convert_to="neuralnetwork",
+        minimum_deployment_target=ct.target.iOS13,
     )
     mlmodel.short_description = "Baseline BabyMont cry classifier for development before real audio training."
     mlmodel.input_description["input"] = "Normalized log-mel spectrogram with shape [1, time, mel, 1]."
-    mlmodel.output_description["classLabel"] = "Predicted class: cry, coo, noise, or silence."
-    mlmodel.output_description["classProbability"] = "Per-class confidence scores."
+    for output_name in mlmodel.output_description:
+        if output_name == "classLabel":
+            mlmodel.output_description[output_name] = "Predicted class: cry, coo, noise, or silence."
+        else:
+            mlmodel.output_description[output_name] = "Per-class confidence scores."
     output_path.parent.mkdir(parents=True, exist_ok=True)
     mlmodel.save(output_path)
 
