@@ -28,6 +28,8 @@ final class BabyMontUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["settings.manualCritical"].exists)
         XCTAssertTrue(app.buttons["settings.audioAlert"].exists)
+        XCTAssertTrue(app.buttons["settings.motionAlert"].exists)
+        XCTAssertTrue(app.buttons["settings.humidityAlert"].exists)
         XCTAssertTrue(app.buttons["settings.cloud.refresh"].exists)
 
         app.tabBars.buttons["Monitor"].tap()
@@ -92,6 +94,38 @@ final class BabyMontUITests: XCTestCase {
         app.tabBars.buttons["Events"].tap()
         XCTAssertTrue(app.staticTexts["Baby crying detected"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Crying"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testMotionAlertEndToEndFromSettingsToEventsAndCloud() {
+        app.tabBars.buttons["Settings"].tap()
+        XCTAssertTrue(app.buttons["settings.motionAlert"].waitForExistence(timeout: 5))
+
+        app.buttons["settings.motionAlert"].tap()
+        app.tabBars.buttons["Monitor"].tap()
+        XCTAssertTrue(app.staticTexts["Critical alert escalated"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["CloudKit saved Prolonged low movement"].waitForExistence(timeout: 5))
+
+        app.tabBars.buttons["Events"].tap()
+        XCTAssertTrue(app.staticTexts["Prolonged low movement"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Motion stayed below threshold for 75 seconds."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Motion"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testHumidityAlertEndToEndFromSettingsToEventsAndCloud() {
+        app.tabBars.buttons["Settings"].tap()
+        XCTAssertTrue(app.buttons["settings.humidityAlert"].waitForExistence(timeout: 5))
+
+        app.buttons["settings.humidityAlert"].tap()
+        app.tabBars.buttons["Monitor"].tap()
+        XCTAssertTrue(app.staticTexts["Critical alert escalated"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["CloudKit saved Nursery humidity high"].waitForExistence(timeout: 5))
+
+        app.tabBars.buttons["Events"].tap()
+        XCTAssertTrue(app.staticTexts["Nursery humidity high"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Relative humidity is 77%."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Humidity"].waitForExistence(timeout: 5))
     }
 
     @MainActor

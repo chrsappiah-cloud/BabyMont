@@ -125,6 +125,49 @@ final class BabyMonitorViewModel: ObservableObject {
         }
     }
 
+    func simulateMotionAlert() async {
+        let motionSignal = MotionSignal(
+            state: .active,
+            activityScore: 0.02,
+            sustainedStillnessSeconds: alertConfiguration.stillnessDuration + 15
+        )
+        let cameraSignal = CameraSignal(
+            state: .active,
+            frameRate: max(snapshot.camera.frameRate, 24),
+            faceConfidence: max(snapshot.camera.faceConfidence, 0.88),
+            personConfidence: max(snapshot.camera.personConfidence, 0.92),
+            occupancyConfidence: max(snapshot.camera.occupancyConfidence, 0.90),
+            capturedFrameCount: max(snapshot.camera.capturedFrameCount, 1)
+        )
+        let testSnapshot = MonitoringSnapshot(
+            camera: cameraSignal,
+            audio: snapshot.audio,
+            motion: motionSignal,
+            temperature: snapshot.temperature,
+            humidity: snapshot.humidity,
+            capturedAt: .now
+        )
+
+        await evaluate(testSnapshot)
+    }
+
+    func simulateHumidityAlert() async {
+        let humiditySignal = HumiditySignal(
+            relativePercent: alertConfiguration.highHumidityPercent + 12,
+            confidence: 0.91
+        )
+        let testSnapshot = MonitoringSnapshot(
+            camera: snapshot.camera,
+            audio: snapshot.audio,
+            motion: snapshot.motion,
+            temperature: snapshot.temperature,
+            humidity: humiditySignal,
+            capturedAt: .now
+        )
+
+        await evaluate(testSnapshot)
+    }
+
     func captureSnapshot() {
         guard let image = dependencies.camera.captureSnapshot() else {
             statusMessage = "No camera frame available for snapshot"
@@ -209,6 +252,17 @@ final class BabyMonitorViewModel: ObservableObject {
 
         if candidates.isEmpty {
             statusMessage = snapshot.isRunning ? "Monitoring locally" : "Local monitor ready"
+        }
+    }
+
+    private func evaluate(_ testSnapshot: MonitoringSnapshot) async {
+        snapshot = testSnapshot
+        persistAudioEventIfNeeded(testSnapshot.audio)
+
+        let candidates = dependencies.alertRules.evaluate(testSnapshot, configuration: alertConfiguration)
+        activeAlerts = candidates
+        for candidate in candidates {
+            await handle(candidate)
         }
     }
 

@@ -339,6 +339,63 @@ struct BabyMonitorViewModelTests {
         #expect(services.cloud.savedEvents.contains { $0.title == "Baby crying detected" })
         #expect(viewModel.statusMessage == "Attention alert recorded")
     }
+
+    @Test func simulatedMotionAlertUsesRuleEngineNotificationStoreWatchAndCloud() async {
+        let services = MockServices()
+        services.alertRules.candidates = [
+            AlertCandidate(
+                category: .motion,
+                severity: .critical,
+                title: "Prolonged low movement",
+                detail: "Motion stayed below threshold for 75 seconds.",
+                confidence: 0.91,
+                metadata: ["source": "motion_rule_engine", "stillness": "75"],
+                shouldNotify: true,
+                shouldEscalateToWatch: true
+            )
+        ]
+        let viewModel = BabyMonitorViewModel(dependencies: services.dependencies)
+
+        await viewModel.simulateMotionAlert()
+
+        #expect(services.alertRules.evaluatedSnapshots.first?.motion.activityScore == 0.02)
+        #expect(services.alertRules.evaluatedSnapshots.first?.motion.sustainedStillnessSeconds == 75)
+        #expect(services.alertRules.evaluatedSnapshots.first?.camera.facePresent == true)
+        #expect(services.push.sentAlerts.first?.title == "Prolonged low movement")
+        #expect(services.watch.escalatedAlerts.first?.category == .motion)
+        #expect(services.home.handledAlerts.first?.category == .motion)
+        #expect(services.store.savedEvents.contains { $0.title == "Prolonged low movement" && $0.didEscalateToWatch })
+        #expect(services.cloud.savedEvents.contains { $0.title == "Prolonged low movement" })
+        #expect(viewModel.statusMessage == "Critical alert escalated")
+    }
+
+    @Test func simulatedHumidityAlertUsesRuleEngineNotificationStoreWatchAndCloud() async {
+        let services = MockServices()
+        services.alertRules.candidates = [
+            AlertCandidate(
+                category: .humidity,
+                severity: .critical,
+                title: "Nursery humidity high",
+                detail: "Relative humidity is 77%.",
+                confidence: 0.91,
+                metadata: ["source": "humidity_rule_engine", "relativeHumidity": "77"],
+                shouldNotify: true,
+                shouldEscalateToWatch: true
+            )
+        ]
+        let viewModel = BabyMonitorViewModel(dependencies: services.dependencies)
+
+        await viewModel.simulateHumidityAlert()
+
+        #expect(services.alertRules.evaluatedSnapshots.first?.humidity.relativePercent == 77)
+        #expect(services.alertRules.evaluatedSnapshots.first?.humidity.confidence == 0.91)
+        #expect(services.push.sentAlerts.first?.title == "Nursery humidity high")
+        #expect(services.watch.escalatedAlerts.first?.category == .humidity)
+        #expect(services.home.handledAlerts.first?.category == .humidity)
+        #expect(services.store.savedEvents.contains { $0.title == "Nursery humidity high" && $0.didRequestPush })
+        #expect(services.cloud.savedEvents.contains { $0.title == "Nursery humidity high" })
+        #expect(viewModel.statusMessage == "Critical alert escalated")
+    }
 }
 
 @MainActor

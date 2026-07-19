@@ -501,7 +501,7 @@ struct EventHistoryView: View {
                             .foregroundStyle(.secondary)
                     }
                     .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("events.history.row")
+                    .accessibilityIdentifier("events.history.row.\(event.category.rawValue).\(event.severity.rawValue)")
                 }
             }
         }
@@ -592,6 +592,20 @@ struct MonitorSettingsView: View {
                     Label("Send Audio Alert Test", systemImage: "waveform.badge.exclamationmark")
                 }
                 .accessibilityIdentifier("settings.audioAlert")
+
+                Button {
+                    Task { await viewModel.simulateMotionAlert() }
+                } label: {
+                    Label("Send Motion Alert Test", systemImage: "figure.child.and.lock")
+                }
+                .accessibilityIdentifier("settings.motionAlert")
+
+                Button {
+                    Task { await viewModel.simulateHumidityAlert() }
+                } label: {
+                    Label("Send Humidity Alert Test", systemImage: "humidity.fill")
+                }
+                .accessibilityIdentifier("settings.humidityAlert")
             }
         }
         .navigationTitle("Settings")
