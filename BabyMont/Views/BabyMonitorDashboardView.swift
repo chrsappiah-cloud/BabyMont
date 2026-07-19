@@ -8,11 +8,8 @@ struct BabyMonitorDashboardView: View {
             VStack(alignment: .leading, spacing: 18) {
                 hero
                 controls
-                backendOperationsPanel
-                readinessPanel
                 cameraPreview
                 signalGrid
-                alertRules
                 eventTimeline
             }
             .padding(20)
@@ -362,26 +359,6 @@ struct BabyMonitorDashboardView: View {
             .accessibilityIdentifier("signal.humidity")
 
             SignalCard(
-                title: "Date & Time",
-                value: viewModel.currentDateTimeSummary,
-                detail: "Apple device clock",
-                systemImage: "clock.fill",
-                tint: .pink,
-                progress: 1
-            )
-            .accessibilityIdentifier("signal.datetime")
-
-            SignalCard(
-                title: "Location",
-                value: viewModel.locationSummary,
-                detail: viewModel.locationDetail,
-                systemImage: "location.fill",
-                tint: .mint,
-                progress: viewModel.snapshot.location.state == .active ? 1 : 0.12
-            )
-            .accessibilityIdentifier("signal.location")
-
-            SignalCard(
                 title: "Alerts",
                 value: "\(viewModel.activeAlerts.count)",
                 detail: "rule matches",
@@ -451,6 +428,314 @@ struct BabyMonitorDashboardView: View {
         }
         .padding(16)
         .background(.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+struct BackendOperationsView: View {
+    @ObservedObject var viewModel: BabyMonitorViewModel
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                backendHero
+                serviceCommandPanel
+                backendOperationsPanel
+                readinessPanel
+                integrationSummary
+            }
+            .padding(20)
+        }
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle("Backend")
+        .accessibilityIdentifier("screen.backend")
+    }
+
+    private var backendHero: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center) {
+                Image(systemName: "server.rack")
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(.indigo)
+                    .frame(width: 52, height: 52)
+                    .background(Color.indigo.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Service Control Center")
+                        .font(.system(.title3, design: .rounded, weight: .bold))
+                    Text("Camera, audio, motion, location, notifications and cloud services coordinated through the local-first architecture.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(16)
+        .background(Color(.systemBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.indigo.opacity(0.14), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var serviceCommandPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Operations")
+                .font(.headline)
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                Button {
+                    Task { await viewModel.requestNotificationReadiness() }
+                } label: {
+                    Label("Prepare", systemImage: "bell.badge.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(ProductionActionButtonStyle(tint: .indigo))
+                .accessibilityIdentifier("backend.prepare")
+                .accessibilityIdentifier("settings.notifications")
+
+                Button {
+                    Task { await viewModel.refreshCloudEvents() }
+                } label: {
+                    Label("Sync", systemImage: "arrow.triangle.2.circlepath.icloud")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(ProductionActionButtonStyle(tint: .blue))
+                .accessibilityIdentifier("backend.sync")
+
+                Button {
+                    Task { await viewModel.captureLocationCheckpoint() }
+                } label: {
+                    Label("Locate", systemImage: "location.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(ProductionActionButtonStyle(tint: .mint))
+                .accessibilityIdentifier("button.location.checkpoint")
+
+                Button {
+                    Task { await viewModel.captureSnapshot() }
+                } label: {
+                    Label("Snapshot", systemImage: "camera.viewfinder")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(ProductionActionButtonStyle(tint: .cyan))
+                .accessibilityIdentifier("settings.snapshot")
+            }
+
+            Divider()
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                Button(role: .destructive) {
+                    Task { await viewModel.simulateCriticalAlert() }
+                } label: {
+                    Label("Critical", systemImage: "exclamationmark.triangle")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(ProductionActionButtonStyle(tint: .red))
+                .accessibilityIdentifier("settings.manualCritical")
+
+                Button {
+                    Task { await viewModel.simulateAudioAlert() }
+                } label: {
+                    Label("Audio", systemImage: "waveform.badge.exclamationmark")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(ProductionActionButtonStyle(tint: .orange))
+                .accessibilityIdentifier("settings.audioAlert")
+
+                Button {
+                    Task { await viewModel.simulateMotionAlert() }
+                } label: {
+                    Label("Motion", systemImage: "figure.child.and.lock")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(ProductionActionButtonStyle(tint: .teal))
+                .accessibilityIdentifier("settings.motionAlert")
+
+                Button {
+                    Task { await viewModel.simulateHumidityAlert() }
+                } label: {
+                    Label("Humidity", systemImage: "humidity.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(ProductionActionButtonStyle(tint: .cyan))
+                .accessibilityIdentifier("settings.humidityAlert")
+            }
+        }
+        .padding(16)
+        .background(Color(.systemBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(.separator).opacity(0.25), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .accessibilityIdentifier("panel.backend.commands")
+    }
+
+    private var backendOperationsPanel: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Backend Operations")
+                        .font(.headline)
+                    Text("Local-first service mesh")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                BackendStatusPill(
+                    title: viewModel.cloudIsAvailable ? "Online" : "Offline",
+                    systemImage: viewModel.cloudIsAvailable ? "checkmark.seal.fill" : "exclamationmark.triangle.fill",
+                    tint: viewModel.cloudIsAvailable ? .green : .orange
+                )
+            }
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                BackendFunctionTile(
+                    title: "APNs",
+                    value: viewModel.pushAuthorizationState.title,
+                    detail: viewModel.deviceTokenSummary,
+                    systemImage: "bell.and.waves.left.and.right.fill",
+                    tint: .indigo,
+                    identifier: "backend.apns"
+                )
+                BackendFunctionTile(
+                    title: "CloudKit",
+                    value: viewModel.cloudIsAvailable ? "Ready" : "Offline",
+                    detail: viewModel.cloudStatusMessage,
+                    systemImage: "icloud.fill",
+                    tint: .blue,
+                    identifier: "readiness.cloud"
+                )
+                BackendFunctionTile(
+                    title: "Watch",
+                    value: viewModel.watchState.title,
+                    detail: "Escalation channel",
+                    systemImage: "applewatch.radiowaves.left.and.right",
+                    tint: .orange,
+                    identifier: "backend.watch"
+                )
+                BackendFunctionTile(
+                    title: "HomeKit",
+                    value: viewModel.homeAutomationIsAvailable ? "Ready" : "Optional",
+                    detail: viewModel.homeAutomationStatusMessage,
+                    systemImage: "homekit",
+                    tint: .purple,
+                    identifier: "backend.homekit"
+                )
+                BackendFunctionTile(
+                    title: "Date & Time",
+                    value: viewModel.currentDateTimeSummary,
+                    detail: "Apple device clock",
+                    systemImage: "clock.fill",
+                    tint: .pink,
+                    identifier: "backend.datetime"
+                )
+                BackendFunctionTile(
+                    title: "Location",
+                    value: viewModel.snapshot.location.state.title,
+                    detail: viewModel.locationDetail,
+                    systemImage: "location.fill",
+                    tint: .mint,
+                    identifier: "backend.location"
+                )
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(.systemBackground))
+                .shadow(color: Color.black.opacity(0.04), radius: 10, x: 0, y: 5)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(.separator).opacity(0.25), lineWidth: 1)
+        )
+        .accessibilityIdentifier("panel.backend.operations")
+    }
+
+    private var readinessPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Service Readiness")
+                .font(.headline)
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                ReadinessTile(
+                    title: "Camera",
+                    value: viewModel.snapshot.camera.state.title,
+                    detail: "\(viewModel.snapshot.camera.capturedFrameCount) frames",
+                    systemImage: "video.fill",
+                    tint: viewModel.snapshot.camera.state == .active ? .green : .secondary
+                )
+                ReadinessTile(
+                    title: "Audio",
+                    value: viewModel.snapshot.audio.state.title,
+                    detail: viewModel.snapshot.audio.classification.title,
+                    systemImage: "waveform",
+                    tint: viewModel.snapshot.audio.state == .active ? .orange : .secondary
+                )
+                ReadinessTile(
+                    title: "CloudKit",
+                    value: viewModel.cloudIsAvailable ? "Ready" : "Offline",
+                    detail: viewModel.cloudStatusMessage,
+                    systemImage: "icloud.fill",
+                    tint: viewModel.cloudIsAvailable ? .blue : .secondary,
+                    identifier: "readiness.cloud.status"
+                )
+                ReadinessTile(
+                    title: "HomeKit",
+                    value: viewModel.homeAutomationIsAvailable ? "Ready" : "Optional",
+                    detail: viewModel.homeAutomationStatusMessage,
+                    systemImage: "homekit",
+                    tint: viewModel.homeAutomationIsAvailable ? .purple : .secondary,
+                    identifier: "readiness.home"
+                )
+                ReadinessTile(
+                    title: "Location",
+                    value: viewModel.snapshot.location.state.title,
+                    detail: viewModel.locationDetail,
+                    systemImage: "location.fill",
+                    tint: viewModel.snapshot.location.state == .active ? .mint : .secondary,
+                    identifier: "readiness.location"
+                )
+            }
+        }
+        .padding(16)
+        .background(Color(.systemBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(.separator).opacity(0.25), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var integrationSummary: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Integration State")
+                .font(.headline)
+            LabeledContent("Status", value: viewModel.statusMessage)
+            LabeledContent("Monitoring", value: viewModel.isMonitoring ? "Running" : "Paused")
+            LabeledContent("Device token", value: viewModel.deviceTokenSummary)
+            LabeledContent("CloudKit", value: viewModel.cloudStatusMessage)
+            Text(viewModel.cloudStatusMessage)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("settings.cloud.status")
+            LabeledContent("Location", value: viewModel.locationSummary)
+            Text(viewModel.locationDetail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("settings.location.status")
+        }
+        .font(.subheadline)
+        .padding(16)
+        .background(Color(.systemBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(.separator).opacity(0.25), lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
@@ -817,62 +1102,11 @@ struct MonitorSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Actions") {
-                Button {
-                    Task { await viewModel.requestNotificationReadiness() }
-                } label: {
-                    Label("Prepare Notifications", systemImage: "bell.badge")
-                }
-                .accessibilityIdentifier("settings.notifications")
-
-                Button {
-                    Task { await viewModel.refreshCloudEvents() }
-                } label: {
-                    Label("Refresh Cloud Events", systemImage: "icloud.and.arrow.down")
-                }
-                .accessibilityIdentifier("settings.cloud.refresh")
-
-                Button(role: .destructive) {
-                    Task { await viewModel.simulateCriticalAlert() }
-                } label: {
-                    Label("Send Manual Critical Test", systemImage: "exclamationmark.triangle")
-                }
-                .accessibilityIdentifier("settings.manualCritical")
-
-                Button {
-                    Task { await viewModel.simulateAudioAlert() }
-                } label: {
-                    Label("Send Audio Alert Test", systemImage: "waveform.badge.exclamationmark")
-                }
-                .accessibilityIdentifier("settings.audioAlert")
-
-                Button {
-                    Task { await viewModel.simulateMotionAlert() }
-                } label: {
-                    Label("Send Motion Alert Test", systemImage: "figure.child.and.lock")
-                }
-                .accessibilityIdentifier("settings.motionAlert")
-
-                Button {
-                    Task { await viewModel.simulateHumidityAlert() }
-                } label: {
-                    Label("Send Humidity Alert Test", systemImage: "humidity.fill")
-                }
-                .accessibilityIdentifier("settings.humidityAlert")
-
-                Button {
-                    Task { await viewModel.captureSnapshot() }
-                } label: {
-                    Label("Capture Snapshot Test", systemImage: "camera.viewfinder")
-                }
-                .accessibilityIdentifier("settings.snapshot")
-
-                Button {
-                    Task { await viewModel.captureLocationCheckpoint() }
-                } label: {
-                    Label("Capture Location Checkpoint", systemImage: "location.viewfinder")
-                }
-                .accessibilityIdentifier("settings.location")
+            Section("Preferences") {
+                Toggle("Low light attention alerts", isOn: $viewModel.alertConfiguration.lowLightEscalates)
+                LabeledContent("Noise threshold", value: "\(Int(viewModel.alertConfiguration.noiseThreshold * 100))%")
+                LabeledContent("Stillness threshold", value: "\(Int(viewModel.alertConfiguration.stillnessThreshold * 100))%")
+                LabeledContent("Humidity range", value: "\(Int(viewModel.alertConfiguration.lowHumidityPercent))-\(Int(viewModel.alertConfiguration.highHumidityPercent))%")
             }
 
             Section("Readiness") {

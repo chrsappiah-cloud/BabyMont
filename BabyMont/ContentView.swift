@@ -40,6 +40,14 @@ struct ContentView: View {
             .accessibilityIdentifier("tab.rules")
 
             NavigationStack {
+                BackendOperationsView(viewModel: viewModel)
+            }
+            .tabItem {
+                Label("Backend", systemImage: "server.rack")
+            }
+            .accessibilityIdentifier("tab.backend")
+
+            NavigationStack {
                 MonitorSettingsView(viewModel: viewModel)
             }
             .tabItem {

@@ -30,7 +30,6 @@ final class BabyMontUITests: XCTestCase {
     @MainActor
     func testPrimaryTabsNavigateToProductionScreens() {
         XCTAssertTrue(app.staticTexts["BabyMont Nursery Command"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.otherElements["readiness.cloud"].waitForExistence(timeout: 5))
 
         app.tabBars.buttons["Events"].tap()
         XCTAssertTrue(app.navigationBars["Events"].waitForExistence(timeout: 3))
@@ -40,15 +39,21 @@ final class BabyMontUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Rules"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.switches["rules.lowLight"].exists)
 
-        app.tabBars.buttons["Settings"].tap()
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["settings.cloud.refresh"].exists)
+        app.tabBars.buttons["Backend"].tap()
+        XCTAssertTrue(app.navigationBars["Backend"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.otherElements["readiness.cloud"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.otherElements["backend.location"].exists)
+        XCTAssertTrue(app.otherElements["backend.datetime"].exists)
         XCTAssertTrue(buttonAfterScrollingTo("settings.manualCritical").waitForExistence(timeout: 3))
         XCTAssertTrue(buttonAfterScrollingTo("settings.audioAlert").waitForExistence(timeout: 3))
         XCTAssertTrue(buttonAfterScrollingTo("settings.motionAlert").waitForExistence(timeout: 3))
         XCTAssertTrue(buttonAfterScrollingTo("settings.humidityAlert").waitForExistence(timeout: 3))
         XCTAssertTrue(buttonAfterScrollingTo("settings.snapshot").waitForExistence(timeout: 3))
-        XCTAssertTrue(buttonAfterScrollingTo("settings.location").waitForExistence(timeout: 3))
+        XCTAssertTrue(buttonAfterScrollingTo("button.location.checkpoint").waitForExistence(timeout: 3))
+
+        app.tabBars.buttons["Settings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
+        XCTAssertTrue(staticTextAfterScrollingTo("settings.cloud.status").waitForExistence(timeout: 3))
 
         app.tabBars.buttons["Monitor"].tap()
         XCTAssertTrue(app.navigationBars["BabyMont"].waitForExistence(timeout: 3))
@@ -93,9 +98,12 @@ final class BabyMontUITests: XCTestCase {
         XCTAssertTrue(app.sliders["rules.noise.threshold"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.sliders["rules.stillness.threshold"].exists)
 
+        app.tabBars.buttons["Backend"].tap()
+        XCTAssertTrue(app.navigationBars["Backend"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.otherElements["readiness.cloud"].waitForExistence(timeout: 3))
+
         app.tabBars.buttons["Settings"].tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["settings.notifications"].waitForExistence(timeout: 3))
         XCTAssertTrue(staticTextAfterScrollingTo("settings.cloud.status").waitForExistence(timeout: 3))
 
         app.tabBars.buttons["Monitor"].tap()
@@ -112,6 +120,8 @@ final class BabyMontUITests: XCTestCase {
         app.buttons["button.monitor.toggle"].tap()
         XCTAssertTrue(app.staticTexts["Monitoring locally"].waitForExistence(timeout: 5))
 
+        app.tabBars.buttons["Backend"].tap()
+        XCTAssertTrue(app.navigationBars["Backend"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.otherElements["backend.location"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.otherElements["backend.datetime"].waitForExistence(timeout: 5))
         for _ in 0..<3 where !app.otherElements["readiness.location"].exists {
@@ -129,13 +139,13 @@ final class BabyMontUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Location checkpoint"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Location"].waitForExistence(timeout: 5))
 
-        app.tabBars.buttons["Settings"].tap()
+        app.tabBars.buttons["Backend"].tap()
         XCTAssertTrue(staticTextAfterScrollingTo("settings.location.status").waitForExistence(timeout: 5))
-        for _ in 0..<3 where !app.buttons["settings.location"].exists {
+        for _ in 0..<3 where !app.buttons["button.location.checkpoint"].exists {
             app.swipeDown()
         }
-        XCTAssertTrue(app.buttons["settings.location"].waitForExistence(timeout: 5))
-        app.buttons["settings.location"].tap()
+        XCTAssertTrue(app.buttons["button.location.checkpoint"].waitForExistence(timeout: 5))
+        app.buttons["button.location.checkpoint"].tap()
         app.tabBars.buttons["Events"].tap()
         XCTAssertTrue(app.staticTexts["Location checkpoint"].waitForExistence(timeout: 5))
     }
@@ -149,7 +159,7 @@ final class BabyMontUITests: XCTestCase {
         app.tabBars.buttons["Events"].tap()
         XCTAssertTrue(app.staticTexts["Manual test alert"].waitForExistence(timeout: 5))
 
-        app.tabBars.buttons["Settings"].tap()
+        app.tabBars.buttons["Backend"].tap()
         let manualCriticalButton = buttonAfterScrollingTo("settings.manualCritical")
         XCTAssertTrue(manualCriticalButton.waitForExistence(timeout: 5))
         manualCriticalButton.tap()
@@ -159,19 +169,18 @@ final class BabyMontUITests: XCTestCase {
 
     @MainActor
     func testReadinessControlsReachCloudAndNotificationServices() {
+        app.tabBars.buttons["Backend"].tap()
         XCTAssertTrue(app.otherElements["readiness.cloud"].waitForExistence(timeout: 5))
 
-        app.buttons["button.apns.readiness"].tap()
+        app.buttons["settings.notifications"].tap()
         XCTAssertTrue(app.staticTexts["CloudKit ready"].waitForExistence(timeout: 5))
 
-        app.buttons["button.test.alert"].tap()
+        app.buttons["settings.manualCritical"].tap()
         XCTAssertTrue(app.staticTexts["CloudKit saved Manual test alert"].waitForExistence(timeout: 5))
 
-        app.buttons["button.cloud.sync"].tap()
+        app.buttons["backend.sync"].tap()
         XCTAssertTrue(app.staticTexts["CloudKit synced 1 events"].waitForExistence(timeout: 5))
 
-        app.tabBars.buttons["Settings"].tap()
-        app.buttons["settings.cloud.refresh"].tap()
         let settingsCloudStatus = staticTextAfterScrollingTo("settings.cloud.status")
         XCTAssertTrue(settingsCloudStatus.waitForExistence(timeout: 5))
         XCTAssertEqual(settingsCloudStatus.label, "CloudKit synced 1 events")
@@ -179,7 +188,7 @@ final class BabyMontUITests: XCTestCase {
 
     @MainActor
     func testAudioAlertEndToEndFromSettingsToEventsAndCloud() {
-        app.tabBars.buttons["Settings"].tap()
+        app.tabBars.buttons["Backend"].tap()
         let audioAlertButton = buttonAfterScrollingTo("settings.audioAlert")
         XCTAssertTrue(audioAlertButton.waitForExistence(timeout: 5))
 
@@ -196,7 +205,7 @@ final class BabyMontUITests: XCTestCase {
 
     @MainActor
     func testMotionAlertEndToEndFromSettingsToEventsAndCloud() {
-        app.tabBars.buttons["Settings"].tap()
+        app.tabBars.buttons["Backend"].tap()
         let motionAlertButton = buttonAfterScrollingTo("settings.motionAlert")
         XCTAssertTrue(motionAlertButton.waitForExistence(timeout: 5))
 
@@ -213,7 +222,7 @@ final class BabyMontUITests: XCTestCase {
 
     @MainActor
     func testHumidityAlertEndToEndFromSettingsToEventsAndCloud() {
-        app.tabBars.buttons["Settings"].tap()
+        app.tabBars.buttons["Backend"].tap()
         let humidityAlertButton = buttonAfterScrollingTo("settings.humidityAlert")
         XCTAssertTrue(humidityAlertButton.waitForExistence(timeout: 5))
 
@@ -244,7 +253,7 @@ final class BabyMontUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["A local nursery snapshot was captured for review."].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Camera"].waitForExistence(timeout: 5))
 
-        app.tabBars.buttons["Settings"].tap()
+        app.tabBars.buttons["Backend"].tap()
         let snapshotButton = buttonAfterScrollingTo("settings.snapshot")
         XCTAssertTrue(snapshotButton.waitForExistence(timeout: 5))
         snapshotButton.tap()
