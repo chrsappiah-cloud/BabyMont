@@ -13,3 +13,9 @@ __pycache__
 .venv
 apns_provider/.venv
 data/**/*.DS_Store
+secrets/
+*.p8
+*.p12
+*.mobileprovision
+*.cer
+*.key

@@ -1,0 +1,28 @@
+services:
+  apns-provider:
+    build:
+      context: .
+      dockerfile: apns_provider/Dockerfile
+    image: worldclassscholars/babymont-apns:local
+    ports:
+      - "8000:8000"
+    environment:
+      APNS_TEAM_ID: "${APNS_TEAM_ID:-YOUR_TEAM_ID}"
+      APNS_KEY_ID: "${APNS_KEY_ID:-YOUR_KEY_ID}"
+      APNS_BUNDLE_ID: "${APNS_BUNDLE_ID:-wcs.BabyMont}"
+      APNS_ENVIRONMENT: "${APNS_ENVIRONMENT:-sandbox}"
+      APNS_AUTH_KEY_PATH: "${APNS_AUTH_KEY_PATH:-/run/secrets/apns_auth_key}"
+    secrets:
+      - apns_auth_key
+
+  cry-model-builder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: worldclassscholars/babymont-ml:local
+    volumes:
+      - ./BabyMont/Resources/Models:/workspace/BabyMont/Resources/Models
+
+secrets:
+  apns_auth_key:
+    file: "${APNS_AUTH_KEY_FILE:-./secrets/AuthKey_XXXXXXX.p8}"
