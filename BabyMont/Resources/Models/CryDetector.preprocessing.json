@@ -1,0 +1,22 @@
+{
+  "model": "BabyMont/Resources/Models/CryDetector.mlmodel",
+  "kind": "synthetic-baseline",
+  "classes": [
+    "cry",
+    "coo",
+    "noise",
+    "silence"
+  ],
+  "sampleRate": 16000,
+  "durationSeconds": 2.0,
+  "nMels": 96,
+  "nFFT": 2048,
+  "hopLength": 512,
+  "inputShape": [
+    1,
+    63,
+    96,
+    1
+  ],
+  "warning": "Development baseline only. Replace with a model trained on real labeled nursery audio."
+}
