@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import SwiftData
 import Testing
 import UIKit
 @testable import BabyMont
@@ -44,6 +45,62 @@ struct BabyMontDomainTests {
         let events = store.recentEvents(limit: 1)
         #expect(events.count == 1)
         #expect(events.first?.id == newer.id)
+    }
+}
+
+@MainActor
+struct BabyMontArchitectureIntegrationTests {
+    @Test func allAlertUnitsPersistToSwiftDataAndRespondThroughBackendServices() async throws {
+        let container = try ModelContainer(
+            for: BabyEvent.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let services = MockServices()
+        let swiftDataStore = SwiftDataEventStore(modelContext: container.mainContext)
+        let dependencies = AppDependencies(
+            camera: services.camera,
+            audio: services.audio,
+            motion: services.motion,
+            alertRules: BabyAlertRuleEngine(),
+            eventStore: swiftDataStore,
+            push: services.push,
+            watch: services.watch,
+            cloudSync: services.cloud,
+            homeAutomation: services.home
+        )
+        let viewModel = BabyMonitorViewModel(dependencies: dependencies)
+
+        await viewModel.startMonitoring()
+        await viewModel.simulateAudioAlert()
+        await viewModel.simulateMotionAlert()
+        await viewModel.simulateHumidityAlert()
+        await viewModel.simulateCriticalAlert()
+        await viewModel.refreshCloudEvents()
+
+        let persistedTitles = swiftDataStore.recentEvents(limit: 12).map(\.title)
+        #expect(persistedTitles.contains("Monitoring started"))
+        #expect(persistedTitles.contains("Crying"))
+        #expect(persistedTitles.contains("Baby crying detected"))
+        #expect(persistedTitles.contains("Prolonged low movement"))
+        #expect(persistedTitles.contains("Nursery humidity high"))
+        #expect(persistedTitles.contains("Manual test alert"))
+
+        #expect(services.push.sentAlerts.map(\.title).contains("Baby crying detected"))
+        #expect(services.push.sentAlerts.map(\.title).contains("Prolonged low movement"))
+        #expect(services.push.sentAlerts.map(\.title).contains("Nursery humidity high"))
+        #expect(services.push.sentAlerts.map(\.title).contains("Manual test alert"))
+        #expect(services.watch.escalatedAlerts.map(\.category).contains(.motion))
+        #expect(services.watch.escalatedAlerts.map(\.category).contains(.humidity))
+        #expect(services.watch.escalatedAlerts.map(\.category).contains(.alert))
+        #expect(services.home.handledAlerts.map(\.category).contains(.audio))
+        #expect(services.home.handledAlerts.map(\.category).contains(.motion))
+        #expect(services.home.handledAlerts.map(\.category).contains(.humidity))
+        #expect(services.cloud.savedEvents.map(\.title).contains("Baby crying detected"))
+        #expect(services.cloud.savedEvents.map(\.title).contains("Prolonged low movement"))
+        #expect(services.cloud.savedEvents.map(\.title).contains("Nursery humidity high"))
+        #expect(services.cloud.savedEvents.map(\.title).contains("Manual test alert"))
+        #expect(viewModel.recentEvents.map(\.title).contains("Manual test alert"))
+        #expect(viewModel.cloudEventCount == services.cloud.savedEvents.count)
     }
 }
 
