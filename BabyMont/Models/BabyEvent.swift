@@ -7,6 +7,7 @@ enum BabyEventCategory: String, CaseIterable, Identifiable, Codable {
     case motion
     case temperature
     case humidity
+    case location
     case alert
     case watch
     case system
@@ -20,6 +21,7 @@ enum BabyEventCategory: String, CaseIterable, Identifiable, Codable {
         case .motion: "Motion"
         case .temperature: "Temperature"
         case .humidity: "Humidity"
+        case .location: "Location"
         case .alert: "Alert"
         case .watch: "Watch"
         case .system: "System"

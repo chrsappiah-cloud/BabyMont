@@ -154,9 +154,25 @@ struct BabyMonitorDashboardView: View {
                     tint: .purple,
                     identifier: "backend.homekit"
                 )
+                BackendFunctionTile(
+                    title: "Date & Time",
+                    value: viewModel.currentDateTimeSummary,
+                    detail: "Apple device clock",
+                    systemImage: "clock.fill",
+                    tint: .pink,
+                    identifier: "backend.datetime"
+                )
+                BackendFunctionTile(
+                    title: "Location",
+                    value: viewModel.snapshot.location.state.title,
+                    detail: viewModel.locationDetail,
+                    systemImage: "location.fill",
+                    tint: .mint,
+                    identifier: "backend.location"
+                )
             }
 
-            HStack(spacing: 10) {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                 Button {
                     Task { await viewModel.requestNotificationReadiness() }
                 } label: {
@@ -174,6 +190,15 @@ struct BabyMonitorDashboardView: View {
                 }
                 .buttonStyle(ProductionActionButtonStyle(tint: .blue))
                 .accessibilityIdentifier("backend.sync")
+
+                Button {
+                    Task { await viewModel.captureLocationCheckpoint() }
+                } label: {
+                    Label("Locate", systemImage: "location.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(ProductionActionButtonStyle(tint: .mint))
+                .accessibilityIdentifier("button.location.checkpoint")
             }
         }
         .padding(16)
@@ -234,6 +259,14 @@ struct BabyMonitorDashboardView: View {
                     systemImage: "homekit",
                     tint: viewModel.homeAutomationIsAvailable ? .purple : .secondary,
                     identifier: "readiness.home"
+                )
+                ReadinessTile(
+                    title: "Location",
+                    value: viewModel.snapshot.location.state.title,
+                    detail: viewModel.locationDetail,
+                    systemImage: "location.fill",
+                    tint: viewModel.snapshot.location.state == .active ? .mint : .secondary,
+                    identifier: "readiness.location"
                 )
             }
         }
@@ -326,6 +359,27 @@ struct BabyMonitorDashboardView: View {
                 tint: .cyan,
                 progress: min((viewModel.snapshot.humidity.relativePercent ?? 0) / 100, 1)
             )
+            .accessibilityIdentifier("signal.humidity")
+
+            SignalCard(
+                title: "Date & Time",
+                value: viewModel.currentDateTimeSummary,
+                detail: "Apple device clock",
+                systemImage: "clock.fill",
+                tint: .pink,
+                progress: 1
+            )
+            .accessibilityIdentifier("signal.datetime")
+
+            SignalCard(
+                title: "Location",
+                value: viewModel.locationSummary,
+                detail: viewModel.locationDetail,
+                systemImage: "location.fill",
+                tint: .mint,
+                progress: viewModel.snapshot.location.state == .active ? 1 : 0.12
+            )
+            .accessibilityIdentifier("signal.location")
 
             SignalCard(
                 title: "Alerts",
@@ -680,6 +734,7 @@ private struct EventRow: View {
         case .motion: "figure.child"
         case .temperature: "thermometer.medium"
         case .humidity: "humidity"
+        case .location: "location"
         case .alert: "exclamationmark.triangle"
         case .watch: "applewatch"
         case .system: "gearshape"
@@ -762,20 +817,6 @@ struct MonitorSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Readiness") {
-                LabeledContent("Status", value: viewModel.statusMessage)
-                LabeledContent("Monitoring", value: viewModel.isMonitoring ? "Running" : "Paused")
-                LabeledContent("Notifications", value: viewModel.pushAuthorizationState.title)
-                LabeledContent("Device token", value: viewModel.deviceTokenSummary)
-                LabeledContent("CloudKit", value: viewModel.cloudStatusMessage)
-                Text(viewModel.cloudStatusMessage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("settings.cloud.status")
-                LabeledContent("HomeKit", value: viewModel.homeAutomationStatusMessage)
-                LabeledContent("Watch", value: viewModel.watchState.title)
-            }
-
             Section("Actions") {
                 Button {
                     Task { await viewModel.requestNotificationReadiness() }
@@ -825,6 +866,33 @@ struct MonitorSettingsView: View {
                     Label("Capture Snapshot Test", systemImage: "camera.viewfinder")
                 }
                 .accessibilityIdentifier("settings.snapshot")
+
+                Button {
+                    Task { await viewModel.captureLocationCheckpoint() }
+                } label: {
+                    Label("Capture Location Checkpoint", systemImage: "location.viewfinder")
+                }
+                .accessibilityIdentifier("settings.location")
+            }
+
+            Section("Readiness") {
+                LabeledContent("Status", value: viewModel.statusMessage)
+                LabeledContent("Monitoring", value: viewModel.isMonitoring ? "Running" : "Paused")
+                LabeledContent("Notifications", value: viewModel.pushAuthorizationState.title)
+                LabeledContent("Device token", value: viewModel.deviceTokenSummary)
+                LabeledContent("CloudKit", value: viewModel.cloudStatusMessage)
+                Text(viewModel.cloudStatusMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("settings.cloud.status")
+                LabeledContent("HomeKit", value: viewModel.homeAutomationStatusMessage)
+                LabeledContent("Watch", value: viewModel.watchState.title)
+                LabeledContent("Date & time", value: viewModel.currentDateTimeSummary)
+                LabeledContent("Location", value: viewModel.locationSummary)
+                Text(viewModel.locationDetail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("settings.location.status")
             }
         }
         .navigationTitle("Settings")

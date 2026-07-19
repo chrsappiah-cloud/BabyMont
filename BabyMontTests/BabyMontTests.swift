@@ -61,6 +61,7 @@ struct BabyMontArchitectureIntegrationTests {
             camera: services.camera,
             audio: services.audio,
             motion: services.motion,
+            location: services.location,
             alertRules: BabyAlertRuleEngine(),
             eventStore: swiftDataStore,
             push: services.push,
@@ -75,6 +76,7 @@ struct BabyMontArchitectureIntegrationTests {
         await viewModel.simulateMotionAlert()
         await viewModel.simulateHumidityAlert()
         await viewModel.captureSnapshot()
+        await viewModel.captureLocationCheckpoint()
         await viewModel.simulateCriticalAlert()
         await viewModel.refreshCloudEvents()
 
@@ -85,6 +87,7 @@ struct BabyMontArchitectureIntegrationTests {
         #expect(persistedTitles.contains("Prolonged low movement"))
         #expect(persistedTitles.contains("Nursery humidity high"))
         #expect(persistedTitles.contains("Snapshot captured"))
+        #expect(persistedTitles.contains("Location checkpoint"))
         #expect(persistedTitles.contains("Manual test alert"))
 
         #expect(services.push.sentAlerts.map(\.title).contains("Baby crying detected"))
@@ -101,6 +104,7 @@ struct BabyMontArchitectureIntegrationTests {
         #expect(services.cloud.savedEvents.map(\.title).contains("Prolonged low movement"))
         #expect(services.cloud.savedEvents.map(\.title).contains("Nursery humidity high"))
         #expect(services.cloud.savedEvents.map(\.title).contains("Snapshot captured"))
+        #expect(services.cloud.savedEvents.map(\.title).contains("Location checkpoint"))
         #expect(services.cloud.savedEvents.map(\.title).contains("Manual test alert"))
         #expect(viewModel.recentEvents.map(\.title).contains("Manual test alert"))
         #expect(viewModel.cloudEventCount == services.cloud.savedEvents.count)
@@ -303,6 +307,7 @@ struct BabyMonitorViewModelTests {
         #expect(services.camera.didStart)
         #expect(services.audio.didStart)
         #expect(services.motion.didStart)
+        #expect(services.location.didStart)
         #expect(services.store.savedEvents.contains { $0.title == "Monitoring started" })
 
         viewModel.stopMonitoring()
@@ -311,8 +316,30 @@ struct BabyMonitorViewModelTests {
         #expect(services.camera.didStop)
         #expect(services.audio.didStop)
         #expect(services.motion.didStop)
+        #expect(services.location.didStop)
         #expect(services.alertRules.didResetCooldowns)
         #expect(services.store.savedEvents.contains { $0.title == "Monitoring stopped" })
+    }
+
+    @Test func locationCheckpointPersistsTimestampCoordinateAndCloudSync() async {
+        let services = MockServices()
+        let viewModel = BabyMonitorViewModel(dependencies: services.dependencies)
+
+        await viewModel.captureLocationCheckpoint()
+
+        #expect(services.location.didStart)
+        #expect(viewModel.snapshot.location.latitude == 5.6037)
+        #expect(viewModel.snapshot.location.longitude == -0.1870)
+        #expect(viewModel.statusMessage == "Location checkpoint saved")
+        #expect(viewModel.cloudStatusMessage == "CloudKit saved Location checkpoint")
+        #expect(services.store.savedEvents.contains { event in
+            event.title == "Location checkpoint" &&
+            event.category == .location &&
+            event.metadata["source"] == "apple_location" &&
+            event.metadata["latitude"] == "5.603700" &&
+            event.metadata["longitude"] == "-0.187000"
+        })
+        #expect(services.cloud.savedEvents.contains { $0.title == "Location checkpoint" && $0.category == .location })
     }
 
     @Test func manualCriticalAlertUsesPushWatchHomeStoreAndCloud() async {
@@ -482,6 +509,7 @@ private final class MockServices {
     let camera = MockCameraMonitoringService()
     let audio = MockAudioMonitoringService()
     let motion = MockMotionMonitoringService()
+    let location = MockLocationTrackingService()
     let alertRules = MockAlertRuleEvaluator()
     let store = MockEventStoreService()
     let push = MockPushNotificationService()
@@ -494,6 +522,7 @@ private final class MockServices {
             camera: camera,
             audio: audio,
             motion: motion,
+            location: location,
             alertRules: alertRules,
             eventStore: store,
             push: push,
@@ -573,6 +602,40 @@ private final class MockMotionMonitoringService: MotionMonitoringService {
     func stop() {
         didStop = true
         signal = MotionSignal(state: .idle)
+    }
+}
+
+@MainActor
+private final class MockLocationTrackingService: LocationTrackingService {
+    private(set) var signal = LocationSignal(state: .idle)
+    private(set) var didRequestAuthorization = false
+    private(set) var didStart = false
+    private(set) var didStop = false
+
+    func requestAuthorization() async {
+        didRequestAuthorization = true
+        signal = activeSignal()
+    }
+
+    func start() async {
+        didStart = true
+        signal = activeSignal()
+    }
+
+    func stop() {
+        didStop = true
+        signal = LocationSignal(state: .idle)
+    }
+
+    private func activeSignal() -> LocationSignal {
+        LocationSignal(
+            state: .active,
+            latitude: 5.6037,
+            longitude: -0.1870,
+            horizontalAccuracyMeters: 12,
+            capturedAt: Date(timeIntervalSince1970: 1_782_848_800),
+            locality: "Accra nursery"
+        )
     }
 }
 

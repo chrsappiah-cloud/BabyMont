@@ -19,6 +19,12 @@ final class BabyMonitorViewModel: ObservableObject {
     private var dependencies: AppDependencies
     private var refreshTask: Task<Void, Never>?
     private var lastAudioEventDates: [AudioClassification: Date] = [:]
+    private static let dateTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .medium
+        return formatter
+    }()
 
     init() {
         self.dependencies = .preview
@@ -53,17 +59,18 @@ final class BabyMonitorViewModel: ObservableObject {
     }
 
     func startMonitoring() async {
-        statusMessage = "Starting local camera, audio and motion services"
+        statusMessage = "Starting local camera, audio, motion and location services"
         await dependencies.camera.start()
         await dependencies.audio.start()
         await dependencies.motion.start()
+        await dependencies.location.start()
 
         isMonitoring = true
         let event = saveEvent(
             category: .system,
             severity: .info,
             title: "Monitoring started",
-            detail: "Camera, audio and motion services are running locally.",
+            detail: "Camera, audio, motion and Apple location services are running locally.",
             syncToCloud: false
         )
         await dependencies.cloudSync.save(event)
@@ -77,6 +84,7 @@ final class BabyMonitorViewModel: ObservableObject {
         dependencies.camera.stop()
         dependencies.audio.stop()
         dependencies.motion.stop()
+        dependencies.location.stop()
         refreshTask?.cancel()
         refreshTask = nil
         isMonitoring = false
@@ -205,6 +213,46 @@ final class BabyMonitorViewModel: ObservableObject {
         statusMessage = "Snapshot captured"
     }
 
+    func captureLocationCheckpoint() async {
+        await dependencies.location.start()
+        let signal = dependencies.location.signal
+        snapshot = MonitoringSnapshot(
+            camera: snapshot.camera,
+            audio: snapshot.audio,
+            motion: snapshot.motion,
+            temperature: snapshot.temperature,
+            humidity: snapshot.humidity,
+            location: signal,
+            capturedAt: .now
+        )
+
+        let capturedAt = Date.now
+        let event = saveEvent(
+            category: .location,
+            severity: .info,
+            title: "Location checkpoint",
+            detail: "\(locationSummary) recorded from Apple location services at \(Self.dateTimeFormatter.string(from: capturedAt)).",
+            confidence: signal.state == .active ? 0.92 : 0.40,
+            metadata: [
+                "source": "apple_location",
+                "timestamp": ISO8601DateFormatter().string(from: capturedAt),
+                "latitude": signal.latitude.map { String(format: "%.6f", $0) } ?? "",
+                "longitude": signal.longitude.map { String(format: "%.6f", $0) } ?? "",
+                "accuracyMeters": signal.horizontalAccuracyMeters.map { String(format: "%.1f", $0) } ?? "",
+                "locality": signal.locality ?? ""
+            ],
+            syncToCloud: false
+        )
+        await dependencies.cloudSync.save(event)
+        if dependencies.cloudSync.isAvailable {
+            cloudStatusMessage = "CloudKit saved Location checkpoint"
+            cloudEventCount += 1
+        } else {
+            cloudStatusMessage = "CloudKit unavailable"
+        }
+        statusMessage = "Location checkpoint saved"
+    }
+
     func refreshCloudEvents() async {
         let events = await dependencies.cloudSync.fetchRecentEvents(limit: 12)
         cloudEventCount = events.count
@@ -235,6 +283,18 @@ final class BabyMonitorViewModel: ObservableObject {
         dependencies.homeAutomation.isAvailable
     }
 
+    var currentDateTimeSummary: String {
+        Self.dateTimeFormatter.string(from: snapshot.capturedAt)
+    }
+
+    var locationSummary: String {
+        snapshot.location.locality ?? snapshot.location.coordinateSummary
+    }
+
+    var locationDetail: String {
+        snapshot.location.accuracySummary
+    }
+
     var deviceTokenSummary: String {
         guard let token = dependencies.push.deviceToken, !token.isEmpty else {
             return "No device token"
@@ -261,6 +321,7 @@ final class BabyMonitorViewModel: ObservableObject {
             motion: dependencies.motion.signal,
             temperature: TemperatureSignal(),
             humidity: HumiditySignal(),
+            location: dependencies.location.signal,
             capturedAt: .now
         )
 

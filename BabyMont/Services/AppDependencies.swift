@@ -8,6 +8,7 @@ struct AppDependencies {
     var camera: any CameraMonitoringService
     var audio: any AudioMonitoringService
     var motion: any MotionMonitoringService
+    var location: any LocationTrackingService
     var alertRules: any AlertRuleEvaluating
     var eventStore: any EventStoreService
     var push: any PushNotificationServicing
@@ -20,6 +21,7 @@ struct AppDependencies {
             camera: LocalCameraMonitoringService(),
             audio: LocalAudioMonitoringService(),
             motion: LocalMotionMonitoringService(),
+            location: LocalLocationTrackingService(),
             alertRules: BabyAlertRuleEngine(),
             eventStore: SwiftDataEventStore(modelContext: modelContext),
             push: PushNotificationService.shared,
@@ -34,6 +36,7 @@ struct AppDependencies {
             camera: PreviewCameraMonitoringService(),
             audio: PreviewAudioMonitoringService(),
             motion: PreviewMotionMonitoringService(),
+            location: PreviewLocationTrackingService(),
             alertRules: BabyAlertRuleEngine(),
             eventStore: InMemoryEventStore(),
             push: PreviewPushNotificationService(),
@@ -134,6 +137,30 @@ final class PreviewMotionMonitoringService: MotionMonitoringService {
 
     func stop() {
         signal = MotionSignal(state: .idle)
+    }
+}
+
+@MainActor
+final class PreviewLocationTrackingService: LocationTrackingService {
+    private(set) var signal = LocationSignal(state: .idle)
+
+    func requestAuthorization() async {
+        signal = LocationSignal(
+            state: .active,
+            latitude: 5.6037,
+            longitude: -0.1870,
+            horizontalAccuracyMeters: 12,
+            capturedAt: .now,
+            locality: "Accra nursery"
+        )
+    }
+
+    func start() async {
+        await requestAuthorization()
+    }
+
+    func stop() {
+        signal = LocationSignal(state: .idle)
     }
 }
 

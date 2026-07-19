@@ -28,6 +28,14 @@ protocol MotionMonitoringService: AnyObject {
 }
 
 @MainActor
+protocol LocationTrackingService: AnyObject {
+    var signal: LocationSignal { get }
+    func requestAuthorization() async
+    func start() async
+    func stop()
+}
+
+@MainActor
 protocol AlertRuleEvaluating: AnyObject {
     func evaluate(_ snapshot: MonitoringSnapshot, configuration: AlertRuleConfiguration) -> [AlertCandidate]
     func resetCooldowns()
