@@ -5,6 +5,7 @@ final class BabyMontUITests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
         app = XCUIApplication()
         app.launchArguments = ["--ui-testing"]
         app.launch()
@@ -61,12 +62,20 @@ final class BabyMontUITests: XCTestCase {
         XCTAssertTrue(app.sliders["rules.stillness.threshold"].exists)
         XCTAssertTrue(app.sliders["rules.humidity.low"].exists)
         XCTAssertTrue(app.sliders["rules.humidity.high"].exists)
-        XCTAssertTrue(app.switches["rules.lowLight"].exists)
 
         let lowLightToggle = app.switches["rules.lowLight"]
-        let initialValue = lowLightToggle.value as? String
-        lowLightToggle.tap()
-        XCTAssertNotEqual(lowLightToggle.value as? String, initialValue)
+        for _ in 0..<3 where !lowLightToggle.exists {
+            app.swipeUp()
+        }
+        XCTAssertTrue(lowLightToggle.waitForExistence(timeout: 3))
+
+        let lowLightState = app.staticTexts["rules.lowLight.state"]
+        XCTAssertTrue(lowLightState.waitForExistence(timeout: 3))
+        XCTAssertEqual(lowLightState.label, "Low light alerts enabled")
+        app.buttons["rules.lowLight.button"].tap()
+        let disabledPredicate = NSPredicate(format: "label == %@", "Low light alerts disabled")
+        expectation(for: disabledPredicate, evaluatedWith: lowLightState)
+        waitForExpectations(timeout: 3)
     }
 
     @MainActor

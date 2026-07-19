@@ -418,8 +418,21 @@ struct AlertRulesView: View {
             Section("Environment") {
                 SliderRow(title: "Low humidity", value: $configuration.lowHumidityPercent, range: 15...45, format: .wholeNumber, identifier: "rules.humidity.low")
                 SliderRow(title: "High humidity", value: $configuration.highHumidityPercent, range: 55...80, format: .wholeNumber, identifier: "rules.humidity.high")
+                Text(configuration.lowLightEscalates ? "Low light alerts enabled" : "Low light alerts disabled")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("rules.lowLight.state")
                 Toggle("Low light attention alerts", isOn: $configuration.lowLightEscalates)
                     .accessibilityIdentifier("rules.lowLight")
+                Button {
+                    configuration.lowLightEscalates.toggle()
+                } label: {
+                    Label(
+                        configuration.lowLightEscalates ? "Disable low light alerts" : "Enable low light alerts",
+                        systemImage: configuration.lowLightEscalates ? "eye.slash" : "eye"
+                    )
+                }
+                .accessibilityIdentifier("rules.lowLight.button")
             }
         }
         .navigationTitle("Rules")

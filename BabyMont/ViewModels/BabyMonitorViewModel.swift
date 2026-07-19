@@ -148,7 +148,7 @@ final class BabyMonitorViewModel: ObservableObject {
         }
         await dependencies.homeAutomation.handle(candidate)
 
-        saveEvent(
+        let event = saveEvent(
             category: candidate.category,
             severity: candidate.severity,
             title: candidate.title,
@@ -156,12 +156,15 @@ final class BabyMonitorViewModel: ObservableObject {
             confidence: candidate.confidence,
             metadata: candidate.metadata,
             didEscalateToWatch: didEscalate,
-            didRequestPush: candidate.shouldNotify
+            didRequestPush: candidate.shouldNotify,
+            syncToCloud: false
         )
+        await dependencies.cloudSync.save(event)
 
         statusMessage = candidate.severity == .critical ? "Critical alert escalated" : "Attention alert recorded"
     }
 
+    @discardableResult
     private func saveEvent(
         category: BabyEventCategory,
         severity: BabyEventSeverity,
@@ -170,8 +173,9 @@ final class BabyMonitorViewModel: ObservableObject {
         confidence: Double = 1,
         metadata: [String: String] = [:],
         didEscalateToWatch: Bool = false,
-        didRequestPush: Bool = false
-    ) {
+        didRequestPush: Bool = false,
+        syncToCloud: Bool = true
+    ) -> BabyEvent {
         let event = BabyEvent(
             category: category,
             severity: severity,
@@ -184,10 +188,13 @@ final class BabyMonitorViewModel: ObservableObject {
         )
         dependencies.eventStore.save(event)
         recentEvents = dependencies.eventStore.recentEvents(limit: 12)
-        Task { [dependencies, event] in
-            await dependencies.cloudSync.save(event)
+        if syncToCloud {
+            Task { [dependencies, event] in
+                await dependencies.cloudSync.save(event)
+            }
         }
         NotificationCenter.default.post(name: .babyEventRaised, object: event)
+        return event
     }
 
     private func persistAudioEventIfNeeded(_ signal: AudioSignal) {
