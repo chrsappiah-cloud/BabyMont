@@ -31,6 +31,10 @@ final class BabyMontUITests: XCTestCase {
         XCTAssertTrue(app.buttons["settings.motionAlert"].exists)
         XCTAssertTrue(app.buttons["settings.humidityAlert"].exists)
         XCTAssertTrue(app.buttons["settings.cloud.refresh"].exists)
+        for _ in 0..<3 where !app.buttons["settings.snapshot"].exists {
+            app.swipeUp()
+        }
+        XCTAssertTrue(app.buttons["settings.snapshot"].waitForExistence(timeout: 3))
 
         app.tabBars.buttons["Monitor"].tap()
         XCTAssertTrue(app.navigationBars["BabyMont"].waitForExistence(timeout: 3))
@@ -126,6 +130,32 @@ final class BabyMontUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Nursery humidity high"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Relative humidity is 77%."].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Humidity"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testSnapshotEndToEndFromMonitorAndSettingsToEventsAndCloud() {
+        XCTAssertTrue(app.buttons["button.monitor.toggle"].waitForExistence(timeout: 5))
+        app.buttons["button.monitor.toggle"].tap()
+        XCTAssertTrue(app.staticTexts["Monitoring locally"].waitForExistence(timeout: 5))
+
+        XCTAssertTrue(app.buttons["button.camera.snapshot"].waitForExistence(timeout: 5))
+        app.buttons["button.camera.snapshot"].tap()
+        XCTAssertTrue(app.staticTexts["Snapshot captured"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["CloudKit saved Snapshot captured"].waitForExistence(timeout: 5))
+
+        app.tabBars.buttons["Events"].tap()
+        XCTAssertTrue(app.staticTexts["Snapshot captured"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["A local nursery snapshot was captured for review."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Camera"].waitForExistence(timeout: 5))
+
+        app.tabBars.buttons["Settings"].tap()
+        for _ in 0..<3 where !app.buttons["settings.snapshot"].exists {
+            app.swipeUp()
+        }
+        XCTAssertTrue(app.buttons["settings.snapshot"].waitForExistence(timeout: 5))
+        app.buttons["settings.snapshot"].tap()
+        app.tabBars.buttons["Monitor"].tap()
+        XCTAssertTrue(app.staticTexts["CloudKit saved Snapshot captured"].waitForExistence(timeout: 5))
     }
 
     @MainActor

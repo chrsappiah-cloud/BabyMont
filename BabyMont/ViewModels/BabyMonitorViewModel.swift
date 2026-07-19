@@ -168,21 +168,31 @@ final class BabyMonitorViewModel: ObservableObject {
         await evaluate(testSnapshot)
     }
 
-    func captureSnapshot() {
+    func captureSnapshot() async {
         guard let image = dependencies.camera.captureSnapshot() else {
             statusMessage = "No camera frame available for snapshot"
             return
         }
 
         lastSnapshot = image
-        saveEvent(
+        let event = saveEvent(
             category: .camera,
             severity: .info,
             title: "Snapshot captured",
             detail: "A local nursery snapshot was captured for review.",
             confidence: dependencies.camera.signal.occupancyConfidence,
-            metadata: ["source": "camera_snapshot"]
+            metadata: [
+                "source": "camera_snapshot",
+                "frameCount": "\(dependencies.camera.signal.capturedFrameCount)"
+            ],
+            syncToCloud: false
         )
+        await dependencies.cloudSync.save(event)
+        if dependencies.cloudSync.isAvailable {
+            cloudStatusMessage = "CloudKit saved Snapshot captured"
+            cloudEventCount += 1
+        }
+        statusMessage = "Snapshot captured"
     }
 
     func refreshCloudEvents() async {

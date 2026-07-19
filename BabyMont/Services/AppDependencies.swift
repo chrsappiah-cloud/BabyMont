@@ -80,7 +80,23 @@ final class PreviewCameraMonitoringService: CameraMonitoringService {
     }
 
     func captureSnapshot() -> UIImage? {
-        nil
+        UIGraphicsImageRenderer(size: CGSize(width: 320, height: 240)).image { context in
+            UIColor.systemIndigo.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 320, height: 240))
+
+            UIColor.systemYellow.setFill()
+            context.cgContext.fillEllipse(in: CGRect(x: 112, y: 54, width: 96, height: 96))
+
+            UIColor.white.withAlphaComponent(0.92).setFill()
+            context.cgContext.fillEllipse(in: CGRect(x: 92, y: 138, width: 136, height: 74))
+
+            let text = "BabyMont"
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 24, weight: .bold),
+                .foregroundColor: UIColor.white
+            ]
+            text.draw(at: CGPoint(x: 96, y: 192), withAttributes: attributes)
+        }
     }
 }
 

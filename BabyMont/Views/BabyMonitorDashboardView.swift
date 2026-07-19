@@ -156,11 +156,12 @@ struct BabyMonitorDashboardView: View {
                     .font(.headline)
                 Spacer()
                 Button {
-                    viewModel.captureSnapshot()
+                    Task { await viewModel.captureSnapshot() }
                 } label: {
                     Label("Snapshot", systemImage: "camera")
                 }
                 .buttonStyle(.bordered)
+                .accessibilityIdentifier("button.camera.snapshot")
             }
 
             if let session = viewModel.cameraSession {
@@ -606,6 +607,13 @@ struct MonitorSettingsView: View {
                     Label("Send Humidity Alert Test", systemImage: "humidity.fill")
                 }
                 .accessibilityIdentifier("settings.humidityAlert")
+
+                Button {
+                    Task { await viewModel.captureSnapshot() }
+                } label: {
+                    Label("Capture Snapshot Test", systemImage: "camera.viewfinder")
+                }
+                .accessibilityIdentifier("settings.snapshot")
             }
         }
         .navigationTitle("Settings")

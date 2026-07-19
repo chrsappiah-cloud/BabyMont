@@ -74,6 +74,7 @@ struct BabyMontArchitectureIntegrationTests {
         await viewModel.simulateAudioAlert()
         await viewModel.simulateMotionAlert()
         await viewModel.simulateHumidityAlert()
+        await viewModel.captureSnapshot()
         await viewModel.simulateCriticalAlert()
         await viewModel.refreshCloudEvents()
 
@@ -83,6 +84,7 @@ struct BabyMontArchitectureIntegrationTests {
         #expect(persistedTitles.contains("Baby crying detected"))
         #expect(persistedTitles.contains("Prolonged low movement"))
         #expect(persistedTitles.contains("Nursery humidity high"))
+        #expect(persistedTitles.contains("Snapshot captured"))
         #expect(persistedTitles.contains("Manual test alert"))
 
         #expect(services.push.sentAlerts.map(\.title).contains("Baby crying detected"))
@@ -98,6 +100,7 @@ struct BabyMontArchitectureIntegrationTests {
         #expect(services.cloud.savedEvents.map(\.title).contains("Baby crying detected"))
         #expect(services.cloud.savedEvents.map(\.title).contains("Prolonged low movement"))
         #expect(services.cloud.savedEvents.map(\.title).contains("Nursery humidity high"))
+        #expect(services.cloud.savedEvents.map(\.title).contains("Snapshot captured"))
         #expect(services.cloud.savedEvents.map(\.title).contains("Manual test alert"))
         #expect(viewModel.recentEvents.map(\.title).contains("Manual test alert"))
         #expect(viewModel.cloudEventCount == services.cloud.savedEvents.count)
@@ -453,6 +456,25 @@ struct BabyMonitorViewModelTests {
         #expect(services.cloud.savedEvents.contains { $0.title == "Nursery humidity high" })
         #expect(viewModel.statusMessage == "Critical alert escalated")
     }
+
+    @Test func snapshotCapturePersistsLocalImageEventAndCloudSync() async {
+        let services = MockServices()
+        let viewModel = BabyMonitorViewModel(dependencies: services.dependencies)
+
+        await services.camera.start()
+        await viewModel.captureSnapshot()
+
+        #expect(viewModel.lastSnapshot != nil)
+        #expect(viewModel.statusMessage == "Snapshot captured")
+        #expect(viewModel.cloudStatusMessage == "CloudKit saved Snapshot captured")
+        #expect(services.store.savedEvents.contains { event in
+            event.title == "Snapshot captured" &&
+            event.category == .camera &&
+            event.metadata["source"] == "camera_snapshot" &&
+            event.metadata["frameCount"] == "24"
+        })
+        #expect(services.cloud.savedEvents.contains { $0.title == "Snapshot captured" && $0.category == .camera })
+    }
 }
 
 @MainActor
@@ -487,12 +509,20 @@ private final class MockCameraMonitoringService: CameraMonitoringService {
     private(set) var signal = CameraSignal(state: .idle)
     var session: AVCaptureSession? { nil }
     var latestFrame: VisionFrame? { nil }
+    var shouldReturnSnapshot = true
     private(set) var didStart = false
     private(set) var didStop = false
 
     func start() async {
         didStart = true
-        signal = CameraSignal(state: .active, frameRate: 30, faceConfidence: 0.85, personConfidence: 0.92)
+        signal = CameraSignal(
+            state: .active,
+            frameRate: 30,
+            faceConfidence: 0.85,
+            personConfidence: 0.92,
+            occupancyConfidence: 0.92,
+            capturedFrameCount: 24
+        )
     }
 
     func stop() {
@@ -501,7 +531,11 @@ private final class MockCameraMonitoringService: CameraMonitoringService {
     }
 
     func captureSnapshot() -> UIImage? {
-        nil
+        guard shouldReturnSnapshot else { return nil }
+        return UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { context in
+            UIColor.systemIndigo.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
+        }
     }
 }
 
